@@ -1,5 +1,2 @@
 # SAE-IIT
-FSAE at Illinois Inststute of Technology
-
-
-We need help
+FSAE at Illinois Inststute of Technolog
