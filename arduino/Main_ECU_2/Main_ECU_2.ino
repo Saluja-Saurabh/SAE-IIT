@@ -2,8 +2,10 @@
 
 
 CAN_message_t RX_msg, TX_msg;
-// Pins data
-
+// Pins 
+byte sig_8.2_on_off = 0;
+byte sig_pump_on_off = 1;
+byte sig_start_button = 2;
 
 // ID'S
 byte ID_temp_1 = 0x0A0;
@@ -130,7 +132,7 @@ char *faults_decoder[8][8] =
 
 void setup() 
 {
-  // Sets all values to zero
+  // Sets all faults to zero
   for (int i = 0; i < 8; ++i)
   {
     for (int k = 0; i < 8; ++i)
