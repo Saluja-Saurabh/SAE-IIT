@@ -56,72 +56,72 @@ char *faults_decoder[8][8] =
   {
     "Control PCB Temperature Low",
     "Control PCB Temperature High",
-    "",
-    "",
-    "",
-    "",
-    "",
-    ""
+    "Gate Dive PCB Temperature Low",
+    "Gate Dive PCB Temperature High",
+    "5V Sense Voltage Low",
+    "5V Sense Voltage High",
+    "12V Sense Voltage Low",
+    "12V Sense Voltage High"
   },
   {
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    ""
+    "2.5V Sense Voltage Low",
+    "2.5V Sense Voltage High",
+    "1.5V Sense Voltage Low",
+    "2.5V Sense Voltage High",
+    "DC Bus Voltage High",
+    "DC Bus Voltage Low",
+    "Precharge Timeout",
+    "Precharge Voltage Failure"
   },
   {
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    ""
+    "EEPROM Checksum Invalid",
+    "EEPROM Data Out of Range",
+    "EEPROM Update Required",
+    "Reserved",
+    "Reserved",
+    "Reserved",
+    "Brake Shorted",
+    "Brake Open"
   },
   {
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    ""
+    "Motor Over-speed Fault",
+    "Over-current Fault",
+    "Over-voltage Fault",
+    "Inverter Over-temperature Fault",
+    "Accelerator Input Shorted Fault",
+    "Accelerator Input Open Fault",
+    "Direction Command Fault",
+    "Inverter Response Time-out Fault"
   },
   {
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    ""
+    "Hardware Gate/Desaturation Fault_2",
+    "Hardware Over-current Fault_2",
+    "Under-voltage Fault",
+    "CAN Command Message Lost Fault",
+    "Motor Over-temperature Fault",
+    "Reserved",
+    "Reserved",
+    "Reserved"
   },
   {
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    ""
+    "Brake Input Shorted Fault",
+    "Brake Input Open Fault",
+    "Module A Over-temperature Fault7",
+    "Module B Over-temperature Fault7",
+    "Module C Over-temperature Fault7",
+    "PCB Over-temperature Fault7",
+    "Gate Drive Board 1 Over-temperature Fault",
+    "Gate Drive Board 2 Over-temperature Fault7"
   },
   {
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    ""
+    "Gate Drive Board 3 Over-temperature Fault7",
+    "Current Sensor Fault",
+    "Reserved",
+    "Reserved",
+    "Reserved",
+    "Reserved",
+    "Resolver Not Connected",
+    "Inverter Discharge Active"
   },
 };
 
@@ -179,30 +179,56 @@ void read_can()
   //canSniff(RX_msg); // Check data
   if ( Can1.read(RX_msg)) 
   {
+    //Serial.println("Motor 1");
     //canSniff(RX_msg); // Check data 
-    read_signed_data();
+    read_signed_data(motor_1);
   }
   else if(Can0.read(RX_msg))
   {
+    //Serial.println("Motor 0");
     //canSniff(RX_msg); // Check data 
-    read_signed_data();
+    read_signed_data(motor_0);
   }
 }
 
-void read_signed_data()
+void read_signed_data(Motor_controller_CAN_data motor)
 {
   if (RX_msg.id == ID_motor_poition) // ID of motor array
     {
-      
+      int full_data = (RX_msg.buf[3] * 255) + RX_msg.buf[2];
       if(RX_msg.buf[3] < 128)
       {
-        motor_1.angular_velocity = (RX_msg.buf[3] * 255) + RX_msg.buf[2];
+        motor.angular_velocity = full_data;
       }
       else if(RX_msg.buf[3] > 128)
       {
-        motor_1.angular_velocity = map((RX_msg.buf[3] * 255) + RX_msg.buf[2],65280,32640,0,-32640);
+        motor.angular_velocity = -1*(~full_data + 1); // takes the twos complement
       }
     }
+}
+
+void read_fault_data(Motor_controller_CAN_data motor)
+{
+  if (RX_msg.id == ID_faults)
+  {
+    for (int col = 0; col < 8; ++col) // for each byte
+    {
+      if (RX_msg.buf[col]) // If the byte has info
+      {
+        for (int row = 0; row < 8; ++row) // for each bit
+        {
+          if (((RX_msg.buf[col] >> row) & 0B00000001)) // If each bit is true, store value
+          {
+            motor.faults[col][row] = *faults_decoder[col][row];
+          }
+          else // No error
+          {
+            motor.faults[col][row] = 0; 
+          }
+        }
+      }
+    }
+  }
 }
 
 
