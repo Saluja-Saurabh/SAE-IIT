@@ -45,17 +45,17 @@ char *faults_decoder[8][8] =
 {
   {
     "Harawre Gate/Desaturation Fault",
-    "",
-    "",
-    "",
-    "",
-    "",
-    "",
-    ""
+    "HW over-current Fault",
+    "Accelerator shorted",
+    "Accelerator Open",
+    "Current sensor Low",
+    "Current sensor High",
+    "Module Tempature Low",
+    "Module Tempature High"
   },
   {
-    "",
-    "",
+    "Control PCB Temperature Low",
+    "Control PCB Temperature High",
     "",
     "",
     "",
