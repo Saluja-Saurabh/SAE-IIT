@@ -16,28 +16,30 @@ byte ID_faults = 0x0AB;
 
 struct Motor_controller_CAN_data
 {
-  int temp_phase_A;
-  int temp_phase_B;
-  int temp_phase_C;
-  int temp_driver_board;
+  int temp_phase_A = 0;
+  int temp_phase_B = 0;
+  int temp_phase_C = 0;
+  int temp_driver_board = 0;
 
-  int temp_control_board;
+  int temp_control_board = 0;
 
-  int sensor_angle;
-  int angular_velocity;
-  int electrical_frequncy;
+  int temp_motor = 0;
 
-  int current_PA;
-  int current_PB;
-  int current_PC;
-  int current_DC;
+  int sensor_angle = 0;
+  int angular_velocity = 0;
+  int electrical_frequncy = 0;
 
-  int voltage_DC;
-  int voltage_output;
-  int voltage_AB;
-  int voltage_BC;
+  int current_PA = 0;
+  int current_PB = 0;
+  int current_PC = 0;
+  int current_DC = 0;
 
-  byte faults[8][8];
+  int voltage_DC = 0;
+  int voltage_output = 0;
+  int voltage_AB = 0;
+  int voltage_BC = 0;
+
+  bool faults[8][8];
   
 }motor_0,motor_1;
 
@@ -122,12 +124,22 @@ char *faults_decoder[8][8] =
     "Reserved",
     "Resolver Not Connected",
     "Inverter Discharge Active"
-  },
+  }
 };
 
 
 void setup() 
 {
+  // Sets all values to zero
+  for (int i = 0; i < 8; ++i)
+  {
+    for (int k = 0; i < 8; ++i)
+    {
+      motor_1.faults[i][k] = 0;
+      motor_0.faults[i][k] = 0;
+    }
+  }
+  
   pinMode(13, OUTPUT); // On board LED to know if code is running 
   digitalWrite(13,HIGH);
   Can1.setBaudRate(250000);
@@ -138,7 +150,9 @@ void setup()
 
 void loop() 
 {
+  write_speed(500, 1);
   read_can();
+  print_faults(motor_1);
 }
 
 void write_speed(int m_speed, bool m_direction) // Max torque speed is 100 NM || 0 = Clockwise  1 = CounterClockwise
@@ -181,33 +195,88 @@ void read_can()
   {
     //Serial.println("Motor 1");
     //canSniff(RX_msg); // Check data 
-    read_signed_data(motor_1);
+    
+    
+    motor_1.temp_phase_A = read_signed_data(ID_temp_1, 0, motor_1.temp_phase_A); // C
+    motor_1.temp_phase_B = read_signed_data(ID_temp_1, 1, motor_1.temp_phase_B);
+    motor_1.temp_phase_C = read_signed_data(ID_temp_1, 2, motor_1.temp_phase_C);
+    motor_1.temp_driver_board = read_signed_data(ID_temp_1, 3, motor_1.temp_driver_board);
+  
+    motor_1.temp_control_board = read_signed_data(ID_temp_2, 0, motor_1.temp_control_board); 
+    
+    motor_1.temp_motor = read_signed_data(ID_temp_3, 2, motor_1.temp_motor); 
+    
+    motor_1.sensor_angle = read_signed_data(ID_motor_poition, 0, motor_1.sensor_angle); // degrees
+    motor_1.angular_velocity = read_signed_data(ID_motor_poition, 1, motor_1.angular_velocity) ; // RPM
+    motor_1.electrical_frequncy = read_signed_data(ID_motor_poition, 2, motor_1.electrical_frequncy) / 10; // Hz
+
+    motor_1.current_PA = read_signed_data(ID_current, 0, motor_1.current_PA); // Amps
+    motor_1.current_PB = read_signed_data(ID_current, 1, motor_1.current_PB);
+    motor_1.current_PC = read_signed_data(ID_current, 2, motor_1.current_PC);
+    motor_1.current_DC = read_signed_data(ID_current, 3, motor_1.current_DC);
+
+    motor_1.voltage_DC = read_signed_data(ID_voltage, 0, motor_1.voltage_DC); // Volts
+    motor_1.voltage_output = read_signed_data(ID_voltage, 1, motor_1.voltage_output);
+    motor_1.voltage_AB = read_signed_data(ID_voltage, 2, motor_1.voltage_AB);
+    motor_1.voltage_BC = read_signed_data(ID_voltage, 3, motor_1.voltage_BC);
+  
+    // Read faults
+    read_fault_data_motor_1();
   }
   else if(Can0.read(RX_msg))
   {
     //Serial.println("Motor 0");
     //canSniff(RX_msg); // Check data 
-    read_signed_data(motor_0);
+    
+    motor_0.temp_phase_A = read_signed_data(ID_temp_1, 0, motor_0.temp_phase_A); // C
+    motor_0.temp_phase_B = read_signed_data(ID_temp_1, 1, motor_0.temp_phase_B);
+    motor_0.temp_phase_C = read_signed_data(ID_temp_1, 2, motor_0.temp_phase_C);
+    motor_0.temp_driver_board = read_signed_data(ID_temp_1, 3, motor_0.temp_driver_board);
+  
+    motor_0.temp_control_board = read_signed_data(ID_temp_2, 0, motor_0.temp_control_board); 
+    
+    motor_0.temp_motor = read_signed_data(ID_temp_3, 2, motor_0.temp_motor); 
+    
+    motor_0.sensor_angle = read_signed_data(ID_motor_poition, 0, motor_0.sensor_angle); // degrees
+    motor_0.angular_velocity = read_signed_data(ID_motor_poition, 1, motor_0.angular_velocity) ; // RPM
+    motor_0.electrical_frequncy = read_signed_data(ID_motor_poition, 2, motor_0.electrical_frequncy) / 10; // Hz
+
+    motor_0.current_PA = read_signed_data(ID_current, 0, motor_0.current_PA); // Amps
+    motor_0.current_PB = read_signed_data(ID_current, 1, motor_0.current_PB);
+    motor_0.current_PC = read_signed_data(ID_current, 2, motor_0.current_PC);
+    motor_0.current_DC = read_signed_data(ID_current, 3, motor_0.current_DC);
+
+    motor_0.voltage_DC = read_signed_data(ID_voltage, 0, motor_0.voltage_DC); // Volts
+    motor_0.voltage_output = read_signed_data(ID_voltage, 1, motor_0.voltage_output);
+    motor_0.voltage_AB = read_signed_data(ID_voltage, 2, motor_0.voltage_AB);
+    motor_0.voltage_BC = read_signed_data(ID_voltage, 3, motor_0.voltage_BC);
+    
+    // Read faults
+    read_fault_data_motor_0();
   }
 }
 
-void read_signed_data(Motor_controller_CAN_data motor)
+int read_signed_data(byte ID, byte position_1, int pre_data) // Position (0,1,2,3) inside data structure of data
 {
-  if (RX_msg.id == ID_motor_poition) // ID of motor array
+  byte low_byte = position_1 * 2;
+  byte high_byte = low_byte + 1;
+  int value = pre_data; // Value set so the number never changes when ID is not true
+  if (RX_msg.id == ID) // ID of motor array
     {
-      int full_data = (RX_msg.buf[3] * 255) + RX_msg.buf[2];
-      if(RX_msg.buf[3] < 128)
+      long full_data = (RX_msg.buf[high_byte] * 255) + RX_msg.buf[low_byte];
+      if(RX_msg.buf[high_byte] < 128)
       {
-        motor.angular_velocity = full_data;
+        value = full_data;
       }
-      else if(RX_msg.buf[3] > 128)
+      else if(RX_msg.buf[high_byte] > 128)
       {
-        motor.angular_velocity = -1*(~full_data + 1); // takes the twos complement
+        value = map(full_data,65280,32640,0,-32640);
       }
     }
+  return value;
 }
 
-void read_fault_data(Motor_controller_CAN_data motor)
+void read_fault_data_motor_1()
 {
   if (RX_msg.id == ID_faults)
   {
@@ -219,13 +288,53 @@ void read_fault_data(Motor_controller_CAN_data motor)
         {
           if (((RX_msg.buf[col] >> row) & 0B00000001)) // If each bit is true, store value
           {
-            motor.faults[col][row] = *faults_decoder[col][row];
+            motor_1.faults[col][row] = 1;
           }
           else // No error
           {
-            motor.faults[col][row] = 0; 
+            motor_1.faults[col][row] = 0; 
           }
         }
+      }
+    }
+  }
+}
+
+void read_fault_data_motor_0()
+{
+  if (RX_msg.id == ID_faults)
+  {
+    for (int col = 0; col < 8; ++col) // for each byte
+    {
+      if (RX_msg.buf[col]) // If the byte has info
+      {
+        for (int row = 0; row < 8; ++row) // for each bit
+        {
+          if (((RX_msg.buf[col] >> row) & 0B00000001)) // If each bit is true, store value
+          {
+            motor_0.faults[col][row] = 1;
+          }
+          else // No error
+          {
+            motor_0.faults[col][row] = 0; 
+          }
+        }
+      }
+    }
+  }
+}
+
+void print_faults(Motor_controller_CAN_data motor)
+{
+  delay(10);
+  Serial.println();
+  for (int i = 0; i < 8; ++i)
+  {
+    for (int k = 0; k < 8; ++k)
+    {
+      if(motor.faults[i][k])
+      {
+        Serial.println(faults_decoder[i][k]);
       }
     }
   }
