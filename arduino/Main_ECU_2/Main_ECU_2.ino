@@ -1,9 +1,8 @@
 #include <IFCT.h>
 
-
 CAN_message_t RX_msg, TX_msg;
 // Pins 
-byte sig_8.2_on_off = 0;
+byte sig_8_2_on_off = 0;
 byte sig_pump_on_off = 1;
 byte sig_start_button = 2;
 
