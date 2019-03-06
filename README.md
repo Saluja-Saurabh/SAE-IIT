@@ -1,2 +1,3 @@
 # SAE-IIT
-FSAE at Illinois Inststute of Technolog
+FSAE at Illinois Inststute of Technology
+
