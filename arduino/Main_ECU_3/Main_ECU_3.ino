@@ -152,8 +152,27 @@ char *faults_decoder[8][8] =
   }
 };
 
+//Global variables
+bool enable_bit = 0;
+
 void setup() 
 {
+  //Setup for pinouts and pinins
+  pinMode(sig_8_2_on_off, OUTPUT);
+  pinMode(sig_buzzer, OUTPUT);
+  pinMode(sig_break_light, OUTPUT);
+  pinMode(servo_pwm, OUTPUT);
+  pinMode(precharge, OUTPUT); // PWM before precharge is done
+  pinMode(sig_AMS_LED, OUTPUT);
+  pinMode(sig_IMD_LED, OUTPUT);
+  pinMode(sig_R_FAN, OUTPUT);
+  pinMode(sig_L_FAN, OUTPUT);
+  pinMode(MC_POWER, OUTPUT);
+  pinMode(sig_pump_on_off, OUTPUT);
+  
+  pinMode(aero_button, INPUT); // Front of dash 
+  pinMode(sig_start_button, INPUT);
+  
   // Sets all faults to zero
   for (int i = 0; i < 8; ++i)
   {
@@ -174,25 +193,39 @@ void setup()
 
 void loop() 
 {
-  int sensorValue = analogRead(A9);
-  //Serial.println(sensorValue);
-  if (sensorValue > 15)
+  // Check if start button is pressed
+  if (digitalRead(sig_start_button) && !enable_bit) // The button is not pressed then the car should not be enabled
   {
-    write_speed(sensorValue, 1, 1);
+    enable_bit = 1; // Let the car be able to move
+  }
+  int accelerator_value = read_accelerator_value();
+  write_speed(accelerator_value, 1, enable_bit);
+  read_can();
+  //print_faults(motor_1);
+}
+
+int read_accelerator_value()
+{
+  int avg_sensor = 0;
+  int sensorValue_1 = analogRead(accelerator_1);
+  int sensorValue_2 = analogRead(accelerator_2);
+  float errorcheck = (abs(sensorValue_1 - sensorValue_2)) / sensorValue_2); // Percent error
+  if (errorcheck <= 0.05) // if the error is less than 5%
+  {
+    avg_sensor = (sensorValue_1 + sensorValue_2) / 2;
   }
   else
   {
-    write_speed(sensorValue, 1, 0);
+    println("Error accelerator reading");
   }
-  //read_can();
-  //print_faults(motor_1);
+  return avg_sensor;
 }
 
 void write_speed(int m_speed, bool m_direction, bool enable_pin) // Max torque speed is 100 NM || 0 = Clockwise  1 = CounterClockwise
 {
   (m_speed >860) ? m_speed = 860 : 1; 
-  int percent_speed = map(m_speed,0,860,0,200); // Converts analog to motor values (NM) || 100NM = 1000 in Code
-  if ((percent_speed < 1000) && (percent_speed > 0)) // Checks if negative or above 100 NM
+  int percent_speed = map(m_speed,0,860,0,100); // Converts analog to motor values (NM) || 100NM = 1000 in Code
+  if ((percent_speed < 1000) && (percent_speed >= 0)) // Checks if negative or above 100 NM
   {
     //Calculations value = (high_byte x 256) + low_byte
     byte low_byte = percent_speed % 256;
@@ -200,7 +233,7 @@ void write_speed(int m_speed, bool m_direction, bool enable_pin) // Max torque s
     
       //Setting up sending data parameters
     TX_msg.ext = 0;
-    TX_msg.id = 0x0C0 + 0x0FF; // Command message ID
+    TX_msg.id = 0x0C0; // Command message ID
     TX_msg.len = 8;
     TX_msg.buf[0] = low_byte; // NM
     TX_msg.buf[1] = high_byte;
