@@ -4,7 +4,8 @@
 CAN_message_t RX_msg, TX_msg;
 long time;
 int inc_time = 0;
-
+int col = 0;
+int row = 0;
 byte ID_temp_1 = 0x0A0;
 byte ID_temp_2 = 0x0A1;
 byte ID_temp_3 = 0x0A2;
@@ -16,7 +17,7 @@ byte ID_faults = 0x0AB;
 struct Motor_controller_CAN_data
 {
   byte id_offset = 0;
-  
+  String motor_name = "";
   float temp_phase_A = 0;
   float temp_phase_B = 0;
   float temp_phase_C = 0;
@@ -44,7 +45,7 @@ struct Motor_controller_CAN_data
   
 }motor_0,motor_1;
 
-char *faults_decoder[8][8] = 
+String faults_decoder[8][8] = 
 {
   {
     "Harawre Gate/Desaturation Fault",
@@ -127,13 +128,7 @@ char *faults_decoder[8][8] =
     "Inverter Discharge Active"
   }
 };
- /*
-//randomSeed(analogRead(A5));
-String M1_name = "M1D" + random(0,1000) + ".txt";
-String M2_name = "M2D" + random(0,1000) + ".txt";
-String M1_name_F = "M1DF" + random(0,1000) + ".txt";
-String M2_name_F = "M2DF" + random(0,1000) + ".txt";
-*/
+ 
 const int chipSelect = BUILTIN_SDCARD;
 void setup() 
 {
@@ -151,6 +146,9 @@ void setup()
   // Set ID offset
   motor_1.id_offset = 0x30;
   motor_0.id_offset = 0x0;
+  //Motor names
+  motor_1.motor_name = "M1";
+  motor_0.motor_name = "M0";
 
 // Sets all faults to zero
   for (int i = 0; i < 8; ++i)
@@ -173,10 +171,12 @@ void loop()
   // make a string for assembling the data to log:
   if (((time - 500) > inc_time))
   {
+    print_fault_1(motor_1);
+    print_fault_0(motor_0);
     File dataFile = SD.open("M1D.txt", FILE_WRITE); // Data logging
 
     inc_time = time; // timer
-    String dataString = time;
+    String dataString = millis();
     dataString += ",";
     dataString += (motor_1.temp_phase_A/10);
     dataString += ",";
@@ -218,50 +218,51 @@ void loop()
       dataFile.println(dataString);
       dataFile.close();
     }
-   
-    dataFile = SD.open("M2D.txt", FILE_WRITE); // Data logging   
-    dataString = time;
-    dataString += ",";
-    dataString += (motor_0.temp_phase_A/10);
-    dataString += ",";
-    dataString += (motor_0.temp_phase_B/10);
-    dataString += ",";
-    dataString += (motor_0.temp_phase_C/10);
-    dataString += ",";
-    dataString += (motor_0.temp_driver_board/10);
-    dataString += ",";
-    dataString += (motor_0.temp_control_board/10);
-    dataString += ",";
-    dataString += (motor_0.temp_motor/10);
-    dataString += ",";
-    dataString += (motor_0.sensor_angle/10);
-    dataString += ",";
-    dataString += (motor_0.angular_velocity/10);
-    dataString += ",";
-    dataString += (motor_0.electrical_frequncy/10);
-    dataString += ",";
-    dataString += (motor_0.current_PA/10);
-    dataString += ",";
-    dataString += (motor_0.current_PB/10);
-    dataString += ",";
-    dataString += (motor_0.current_PC/10);
-    dataString += ",";
-    dataString += (motor_0.current_DC/10);
-    dataString += ",";
-    dataString += (motor_0.voltage_DC/10);
-    dataString += ",";
-    dataString += (motor_0.voltage_output/10);
-    dataString += ",";
-    dataString += (motor_0.voltage_AB/10);
-    dataString += ",";
-    dataString += (motor_0.voltage_BC/10);
-    dataString += ",";
-    dataString += (motor_0.current_DC/10);
-     if (dataFile) 
+
+    dataFile = SD.open("M0D.txt", FILE_WRITE); // Data logging   
+    String dataString_ = millis();
+    dataString_ += ",";
+    dataString_ += (motor_0.temp_phase_A/10);
+    dataString_ += ",";
+    dataString_ += (motor_0.temp_phase_B/10);
+    dataString_ += ",";
+    dataString_ += (motor_0.temp_phase_C/10);
+    dataString_ += ",";
+    dataString_ += (motor_0.temp_driver_board/10);
+    dataString_ += ",";
+    dataString_ += (motor_0.temp_control_board/10);
+    dataString_ += ",";
+    dataString_ += (motor_0.temp_motor/10);
+    dataString_ += ",";
+    dataString_ += (motor_0.sensor_angle/10);
+    dataString_ += ",";
+    dataString_ += (motor_0.angular_velocity/10);
+    dataString_ += ",";
+    dataString_ += (motor_0.electrical_frequncy/10);
+    dataString_ += ",";
+    dataString_ += (motor_0.current_PA/10);
+    dataString_ += ",";
+    dataString_ += (motor_0.current_PB/10);
+    dataString_ += ",";
+    dataString_ += (motor_0.current_PC/10);
+    dataString_ += ",";
+    dataString_ += (motor_0.current_DC/10);
+    dataString_ += ",";
+    dataString_ += (motor_0.voltage_DC/10);
+    dataString_ += ",";
+    dataString_ += (motor_0.voltage_output/10);
+    dataString_ += ",";
+    dataString_ += (motor_0.voltage_AB/10);
+    dataString_ += ",";
+    dataString_ += (motor_0.voltage_BC/10);
+    dataString_ += ",";
+    dataString_ += (motor_0.current_DC/10);
+    if (dataFile) 
   {
-    dataFile.println(dataString);
+    dataFile.println(dataString_);
     dataFile.close();
   }
+
  }
 }
 
@@ -384,11 +385,11 @@ void read_fault_data_motor_0()
 {
   if (RX_msg.id == ID_faults + motor_1.id_offset)
   {
-    for (int col = 0; col < 8; ++col) // for each byte
+    for (int col; col < 8; ++col) // for each byte
     {
       if (RX_msg.buf[col]) // If the byte has info
       {
-        for (int row = 0; row < 8; ++row) // for each bit
+        for (row = 0; row < 8; ++row) // for each bit
         {
           if (((RX_msg.buf[col] >> row) & 0B00000001)) // If each bit is true, store value
           {
@@ -400,6 +401,40 @@ void read_fault_data_motor_0()
           }
         }
       }
+    }
+  }
+}
+
+void print_fault_0(Motor_controller_CAN_data motor)
+{
+  for (int i = 0; i < 8; ++i)
+  {
+    for (int k = 0; k < 8; ++k)
+    {
+      if(motor.faults[i][k])
+      {
+        String fault_name = faults_decoder[i][k];
+        File dataFile = SD.open("M0F.txt", FILE_WRITE); // Data logging   
+        dataFile.println(fault_name);
+        dataFile.close();
+      } 
+    }
+  }
+}
+
+void print_fault_1(Motor_controller_CAN_data motor)
+{
+  for (int i = 0; i < 8; ++i)
+  {
+    for (int k = 0; k < 8; ++k)
+    {
+      if(motor.faults[i][k])
+      {
+        String fault_name = faults_decoder[i][k];
+        File dataFile = SD.open("M1F.txt", FILE_WRITE); // Data logging   
+        dataFile.println(fault_name);
+        dataFile.close();
+      } 
     }
   }
 }
