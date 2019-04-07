@@ -1,5 +1,11 @@
 #include "Arduino.h"
 #include "Math.h"
+#include <Wire.h>
+#include <Adafruit_Sensor.h>
+#include <Adafruit_BNO055.h>
+#include <utility/imumaths.h>
+  
+Adafruit_BNO055 bno = Adafruit_BNO055(55);
 
 /*
   Wheels
@@ -10,8 +16,6 @@
   Steering
 
           steer - sr
-
-   
 
   Speed
 
@@ -67,72 +71,77 @@
 
   
 
-
-
-
 */
+
+
+
 
 float PID_error = 0;
 float previous_error = 0;
-float elapsedTime, Time, timePrev;
+
+
+unsigned float elapsedTime, Time, timePrev;
 float PID_value = 0;
 
 
 void setup() {
-  // put your setup code here, to run once:
 
+  //micros will take 11 hours to overflow, millis() takes 49 days
+  //will use float and millis in order to keep precision and avoid overflow
+  //use unsigned so that the range is from 0 to x, without negative values
   Time = millis();
 
-//vy = 
-//vx = CAN motor speed * radius from shaft to wheel
+  
+  //vy = 
+  //vx = CAN motor speed * radius from shaft to wheel
 
-v = sqrt(vx^2+vy^2);
+  v = sqrt(vx^2+vy^2);
 
-beta = atan(vy/vx);
+  beta = atan(vy/vx);
 
-alpha1 = alpha2 = beta + (lf*gamma)/(v) - delta;
+  alpha1 = alpha2 = beta + (lf*gamma)/(v) - delta;
 
-alpha3 = alpha4 = beta - (lr*gammay)/(v);
+  alpha3 = alpha4 = beta - (lr*gammay)/(v);
 
-gammades = (v*delta)/(lf+lr);
-
-
-//yawrate error calculations
-gammaE = gammaDes - gamma;
-
-//Minimize this stability (S) equation
-S = fabs(gammaDes - gamma) - fabs(betaabs - beta);
+  gammades = (v*delta)/(lf+lr);
 
 
-//Forces on wheels
-Fzfl = 1/2 *lr/l * m * g - rhof*ay*m*hg/df - ax*m*hg/l;
+  //yawrate error calculations
+  gammaE = gammaDes - gamma;
 
-Fzfr = 1/2 *lr/l * m * g + rhof*ay*m*hg/df - ax*m*hg/l;
-
-Fzrl = 1/2 *lf/l * m * g - rhor*ay*m*hg/dr + ax*m*hg/l;
-
-Fzrr = 1/2 *lf/l * m * g + rhor*ay*m*hg/dr + ax*m*hg/l;
+  //Minimize this stability (S) equation
+  S = fabs(gammaDes - gamma) - fabs(betaabs - beta);
 
 
-//experimental factor Kt
-Kstablerr = 4*Kt*Fzrr/m;
+  //Forces on wheels
+  Fzfl = 1/2 *lr/l * m * g - rhof*ay*m*hg/df - ax*m*hg/l;
 
-Kstablerl = 4*Kt*Fzrl/m;
+  Fzfr = 1/2 *lr/l * m * g + rhof*ay*m*hg/df - ax*m*hg/l;
 
-Kstablefr = 4*Kt*Fzfr/m;
+  Fzrl = 1/2 *lf/l * m * g - rhor*ay*m*hg/dr + ax*m*hg/l;
 
-Kstablefl = 4*Kt*Fzfl/m;
+  Fzrr = 1/2 *lf/l * m * g + rhor*ay*m*hg/dr + ax*m*hg/l;
 
 
-//Oversteering case
+  //experimental factor Kt
+  Kstablerr = 4*Kt*Fzrr/m;
 
-Kunstablerr = 1 + Kpprr * gammaE;
+  Kstablerl = 4*Kt*Fzrl/m;
 
-Kunstablerl = 1 - Kpprl * gammaE;
+  Kstablefr = 4*Kt*Fzfr/m;
 
-Kunstablefr = 1 + Kppfr * gammaE;
+  Kstablefl = 4*Kt*Fzfl/m;
 
-Kunstablefl = 1 - Kppfl * gammaE;
+
+  //Oversteering case
+
+  Kunstablerr = 1 + Kpprr * gammaE;
+
+  Kunstablerl = 1 - Kpprl * gammaE;
+
+  Kunstablefr = 1 + Kppfr * gammaE;
+
+  Kunstablefl = 1 - Kppfl * gammaE;
 
 
 
@@ -140,20 +149,55 @@ Kunstablefl = 1 - Kppfl * gammaE;
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
-
-
+  
+  //Get time interval
   timePrev = Time;
   Time = millis();
 
   elapsedTime = (Time-timePrev)/1000;
 
+  
+  //read desired throttle
+  
+  
+  //read brake sensor
+  
+  
+  //read steering angle
+  
+  
+  //Obtain radius, inner and outer turning angle
+
+
+
+        //Accelerometer data  
+  
+  //Orientation
+  
+  imu::Vector<3> euler = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
+  
+  yaw = euler.z();
+  
+  pitch = euler.y();
+  
+  roll = euler.x();
+  
+  //Rates
+  
+  imu::Vector<3> accel = bno.getVector(Adafruit_BNO055::VECTOR_ACCELEROMETER);
+  
+  x = accel.x();
+  
+  y = accel.y();
+  
+  z = accel.z();
+  
+  
+  
   //Ackerman geometry
 
 
-  // Lateral acceleration
-  Ay = V ^ 2 / R;
-
+  
   //Equations of motion
 
 
