@@ -8,6 +8,17 @@
 Adafruit_BNO055 bno = Adafruit_BNO055(55);
 
 /*
+
+Input - Throttle position, all other sensors
+
+
+Setpoint - Desired Throttle, desired torque
+
+
+Ouput - Throttle commands
+
+
+
   Wheels
 
           Wheelbase Front track width - df
@@ -154,8 +165,13 @@ void loop() {
   timePrev = Time;
   Time = millis();
 
-  elapsedTime = (Time-timePrev)/1000;
+  elapsedTime = (Time-timePrev);
 
+  if (elapsedTime >= 10){ //run the pid normally with accelerometer updates
+    
+    
+  
+  
   
   //read desired throttle
   
@@ -193,12 +209,11 @@ void loop() {
   z = accel.z();
   
   
-  
-  //Ackerman geometry
-
-
-  
-  //Equations of motion
+  } else { //run the algorithm without accessing the accelerometer data (too slow because only 100 HZ
+    
+    
+    
+  }
 
 
   
