@@ -71,8 +71,8 @@ void loop() {
   int breakValue = analogRead(BREAK);
   if (brakeValue >= 0){
   
-  torqueleft = 0;
-  torqueright = 0;
+  leftTorque = 0;
+  rightTorque = 0;
   
   }
   
@@ -90,11 +90,11 @@ void loop() {
   
   // Obtain individual torques
   
-  leftChange = percent_torque + steeringValue/100 * percent_torque/2;
-  int leftTorque = min(percent_torque, leftChange);
+  leftChange = percent_torque + steeringValue/100 * percent_torque/aggressiveness;
+  int leftTorque = (int)min(percent_torque, leftChange);
   
-  rightChange = percent_torque - steeringValue/100 * percent_torque/2;
-  int rightTorque = min(percent_torque, rightChange);
+  rightChange = percent_torque - steeringValue/100 * percent_torque/aggressiveness;
+  int rightTorque = (int)min(percent_torque, rightChange);
   
   //send out torque commands
 
