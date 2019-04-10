@@ -82,28 +82,39 @@ void loop() {
   int accelerator_value = read_accelerator_value();  // Analog value from 0 to 860
   (accelerator_value >860) ? m_speed = 860 : 1; 
   float percent_torque = map(accelerator_value,0,860,0,100); // Converts analog to motor values (NM) || 100NM = 1000 in Code
+  
+  float left_torque = torqVec(percent_torque, 0);
+  float right_torque = torqVec(percent_torque, 1);
+  
+}
 
-
+float torqVec(float percent_torque, bool side){ // side left 0, side right 1
+  
+  
   // steering angle
   
   float steeringValue = read_steering_value(); //Right turn (+) Left turn (-) 
   
+  if (side)
+  {
+  
   // Obtain individual torques
   
-  leftChange = percent_torque + steeringValue/100 * percent_torque/aggressiveness;
+  leftChange = percent_torque + (steeringValue/100) * (percent_torque/aggressiveness);
   int leftTorque = (int)min(percent_torque, leftChange);
   
-  rightChange = percent_torque - steeringValue/100 * percent_torque/aggressiveness;
+  }
+  
+  elseif (!side)
+  {
+      
+  rightChange = percent_torque - (steeringValue/100) * (percent_torque/aggressiveness);
   int rightTorque = (int)min(percent_torque, rightChange);
   
-  //send out torque commands
-
-  write_torque(leftTorque, 1, enable_bit); //leftmotor
-  write_torque(rightTorque, 1, enable_bit); //rightmotor
+  }
+    
   
 }
-
-
 
 
 
