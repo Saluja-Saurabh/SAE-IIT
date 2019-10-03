@@ -185,7 +185,7 @@ void setup()
   // Sets all faults to zero
   for (int i = 0; i < 8; ++i)
   {
-    for (int k = 0; i < 8; ++i)
+    for (int k = 0; k < 8; ++k)
     {
       motor_1.faults[i][k] = 0;
       motor_0.faults[i][k] = 0;
