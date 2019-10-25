@@ -1,0 +1,7 @@
+{
+    "port": "COM8",
+    "programmer": "AVRISP mkII",
+    "board": "arduino:avr:teensy36",
+    "configuration": "usb=serial,speed=180,opt=o2std,keys=en-us",
+    "sketch": "CANBUS2.ino"
+}
