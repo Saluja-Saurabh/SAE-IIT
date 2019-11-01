@@ -1,0 +1,6 @@
+{
+    "port": "COM8",
+    "board": "arduino:avr:teensy36",
+    "configuration": "usb=serial,speed=180,opt=o2std,keys=en-us",
+    "sketch": "TT_CanBus_2019.ino"
+}
