@@ -1,0 +1,128 @@
+/*     decoders    */
+//unsure if decoding in nessessary on teensy side
+const char *motorDecoder[8][8] = {
+    {
+        //motor_volt
+        "DCBus",
+        "Output",
+        "VAB_Vd",
+        "VBC_Vq",
+    },
+    {
+        //motor_current
+        "PhaseA",
+        "PhaseB",
+        "PhaseC",
+        "DCBus",
+    },
+    {
+        //motor_temp1
+        "PhaseA",
+        "PhaseB",
+        "PhaseC",
+        "DriverBoard",
+    },
+    {
+        //motor_temp2
+        "ControlBoard",
+        "null",
+        "null",
+        "null",
+    },
+    {
+        //motor_temp3
+        "null",
+        "null",
+        "motor",
+        "torqueShudder",
+    },
+    {
+        //motor_pos
+        "angle",
+        "anglrVel",
+        "electricalFreq",
+        "null",
+    },
+};
+const char *faultDecoder[8][8] = {
+    {
+        "Hardware Gate/Desaturation Fault",
+        "HW over-current Fault",
+        "Accelerator shorted",
+        "Accelerator Open",
+        "Current sensor Low",
+        "Current sensor High",
+        "Module Tempature Low",
+        "Module Tempature High",
+    },
+    {
+        "Control PCB Temperature Low",
+        "Control PCB Temperature High",
+        "Gate Dive PCB Temperature Low",
+        "Gate Dive PCB Temperature High",
+        "5V Sense Voltage Low",
+        "5V Sense Voltage High",
+        "12V Sense Voltage Low",
+        "12V Sense Voltage High",
+    },
+    {
+        "2.5V Sense Voltage Low",
+        "2.5V Sense Voltage High",
+        "1.5V Sense Voltage Low",
+        "2.5V Sense Voltage High",
+        "DC Bus Voltage High",
+        "DC Bus Voltage Low",
+        "Precharge Timeout",
+        "Precharge Voltage Failure",
+    },
+    {
+        "EEPROM Checksum Invalid",
+        "EEPROM Data Out of Range",
+        "EEPROM Update Required",
+        "Reserved",
+        "Reserved",
+        "Reserved",
+        "Brake Shorted",
+        "Brake Open",
+    },
+    {
+        "Motor Over-speed Fault",
+        "Over-current Fault",
+        "Over-voltage Fault",
+        "Inverter Over-temperature Fault",
+        "Accelerator Input Shorted Fault",
+        "Accelerator Input Open Fault",
+        "Direction Command Fault",
+        "Inverter Response Time-out Fault",
+    },
+    {
+        "Hardware Gate/Desaturation Fault_2",
+        "Hardware Over-current Fault_2",
+        "Under-voltage Fault",
+        "CAN Command Message Lost Fault",
+        "Motor Over-temperature Fault",
+        "Reserved",
+        "Reserved",
+        "Reserved",
+    },
+    {
+        "Brake Input Shorted Fault",
+        "Brake Input Open Fault",
+        "Module A Over-temperature Fault7",
+        "Module B Over-temperature Fault7",
+        "Module C Over-temperature Fault7",
+        "PCB Over-temperature Fault7",
+        "Gate Drive Board 1 Over-temperature Fault",
+        "Gate Drive Board 2 Over-temperature Fault7",
+    },
+    {
+        "Gate Drive Board 3 Over-temperature Fault7",
+        "Current Sensor Fault",
+        "Reserved",
+        "Reserved",
+        "Reserved",
+        "Reserved",
+        "Resolver Not Connected",
+        "Inverter Discharge Active",
+    },
+};
