@@ -148,3 +148,29 @@ void canSniff(const CAN_message_t &msg) {
     }
     Serial.println();
 }
+
+/*  TTMsg example
+void fooReact() {
+    Serial.println("this func is called by fooSensor when flag bit 5 is true");
+}
+TTMsg fooSensor{
+    FOO,
+    { //Sensor table also tells reciving ECUs what data they should be expecting
+        NIL,       // byte 0 & 1 are free
+        fooSenPin, // foo is on byte 2 & 3
+        barSenPin, // bar is on byte 4 & 5
+        NIL,       // byte 6 & 7 are free
+    },
+    0, // flag is on byte 0
+    {
+        NULL, // no func called for this flag bit
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+        fooReact, // this is flag bit 5
+        NULL,     // last two not needed but shows all flag bits
+        NULL,
+    },
+};
+*/
