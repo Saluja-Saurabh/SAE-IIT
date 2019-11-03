@@ -1,21 +1,9 @@
 #include <IFCT.h>                 // ImprovedFLexCanLibrary
-typedef uint_fast8_t uint8;       // Ensures no mixing between unsigned and signed bytes
-typedef void (*flagReader)(void); // functions that are called when flags are true
-typedef void (*pktIntrpr)(uint8); // functions that are called for msg bytes
+typedef uint32_t uint32;          // CAN_message_t id type
+typedef void (*flagReader)(void); // functions that are called when flag bits are true
 
-/*     Pins    */ //TODO: add pins for individual teensys
-// Aero
-// Electrical
-// Gyro
-// Pump
-
-typedef enum pktType : uint8 {
-    NIL,
-    FLAG,
-    LOWBYTE,
-    HIGHBYTE,
-};
-enum CanADR : uint8 { // TODO: layout all the addresses for everything passed by CAN
+// TODO: decide on addresses for all the sensors and bms
+enum CanADR : uint32 {
     // motor
     TEMP1 = 0x0A0,
     TEMP2 = 0x0A1,
@@ -31,39 +19,71 @@ enum CanADR : uint8 { // TODO: layout all the addresses for everything passed by
     BAR = 0x0BB,
 };
 
-//TODO: make motorPackets work with TTPkt
+//TODO: make motorPackets work with TTMsg
 struct motorDataPkt {
-    uint8 idOffset = 0;
-    long values[8][8]; // not all the tables will be used eg. ANLIV & DIGIS
+    uint32 idOffset = 0;
+    int values[8][8]; // not all the tables will be used eg. ANLIV & DIGIS
     bool faults[8][8];
 } motor0, motor1;
 
+// Used to identify what sensors go into what message
+enum sensor { // Pin0 must be sacrificed to the gods to have a nil value
+    NIL = 0,
+    fooSenPin = 5,
+    barSenPin = 19,
+    startBPin = 23,
+};
+
+// TODO: figure out how data will be pushed to andriod // andriod will decode bytes based off address
 /*
     Byte # (map)| 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 | // byte index in CAN message
-    H&L 'packet'        | H | L |   =   |  PKT  | // LOWBYTE and HIGHBYTE must be next to each other, referred as packets(PKT)
-    PKT pos     |  PKT  |  PKT  |  PKT  |  PKT  | // Valid PKT placement NOTE: must be set as seprate H & L in map array
-    FLAG pos    | F | F | F | F | F | F | F | F | // Valid FLAG placement NOTE: currently only one flag is per PKT supported
-    pktIntrpr   | I |   | I |   | I |   | I |   | // Where PKT interpreter functions are called
-    flagReader  | R | R | R | R | R | R | R | R | // Where FLAG reader functions are called
+    H&L 'packet'        | H | L |   =   |  PKT  | // L and H bytes must be next to each other, referred as packets(PKT)
+    PKT pos     |  PKT  |  PKT  |  PKT  |  PKT  | // Valid PKT placement NOTE: is set as seprate H & L in actual buffer
+    sensor      |   | S3|   | S2|   | S1|   | S0| // Where sensors are called (based off pos in TTMsg table | Byte#/2)
+    FLAG pos    | F | F | F | F | F | F | F | F | // Valid FLAG placement NOTE: currently only one flag per msg
 */
-typedef struct TTPkt { // Teensy to Teensy packet definition
-    uint8 address;     // identifies how the msg should be interpreted
-    pktType map[8];
-    //TODO: see if sensors need specific interpreters, else , if its just a basic analog values then give all TTPkt same func
-    pktIntrpr intrprs[4];     // max 4 pkt interpreters per packet
-    flagReader *flagFuncs[8]; //limits each packet to one flag byte
-    int values[8];            // not all the tables will be used eg. ANLIV & DIGIS
-} TTPkt;
+typedef struct TTMsg {       // Teensy to Teensy message definition/structure
+    uint32 address;          // identifies how the msg should be interpreted using it's address
+    sensor sensors[4];       // sensors that have data in this message; position in table sets where PKT goes (see ^)
+    char flagPos = -1;       // where the flag goes as shown above ^ NOTE: negative means no flag
+    flagReader flagFuncs[8]; // functions that are called when flag bit is true; limits each packet to one flag byte
+    byte flag;               // stored flag value
+    byte values[8];          // values from bytes that can be pushed after reading
+    // Maybe add single packet interpreter for special cases such as motor? default to normal pkt reading?
+} TTMsg;
 
-TTPkt fooSensor{
+/* ----- ECU specific data ----- */
+
+// more logical examples
+void preCharge() {
+    Serial.println("NNNNNNNYYYYOOWWMMMMM!"); //called when flag bit 0 == true
+}
+
+// this message only checks the flag
+TTMsg startButton{
+    BAR,
+    {},
+    0,
+    {preCharge},
+};
+
+// two packets used in this message
+TTMsg fooBar{
     FOO,
     {
-
-    },
-    {
-
+        //Sensor table also tells reciving ECUs what data they should be expecting
+        fooSenPin,
+        barSenPin,
     },
 };
+
+// load all the ECU specific messages
+TTMsg TTMessages[]{
+    startButton,
+    fooBar,
+};
+
+/* ----- END ECU specific data ----- */
 
 void setup() {
     // Set motorID address offsets
@@ -86,49 +106,86 @@ void setup() {
 void loop() {
     CAN_message_t dataIn; // Can message obj
     if (Can0.read(dataIn)) {
-        if (motorRead(dataIn, motor0)) {
-            // Can0.write(dataOut);
+        if (motorRead(dataIn, motor0)) { //TODO: move motor id matching to sepreate method
         } else if (motorRead(dataIn, motor1)) {
-            // Can0.write(dataOut);
         } else {
-            // for (TTPkt &pkt : maps) {
-            //     if (pkt.address == dataIn.id) {
-            //         readPacket(pkt);
-            //         break;
-            //     };
-            // }
+            teensyRead(dataIn);
         }
     }
+    teensyWrite();
 }
 
-void writeCAN(const byte &address, const uint8 &position, const uint8 value[8]) {
+int decodeByte(const byte low, const byte high) { // probably will only be used to push to andriod
+    int full_data = (high * 255) + low;           // convert LH data to a value
+    //TODO: is there a diffrent way to get negatives? Also what value does 128 map to ?
+    return high < 128 ? full_data : map(full_data, 65280, 32640, 0, -32640); // remap for neg
+}
+
+void writeTTMsg(const TTMsg &msg) {
     // CAN value conversion : value = (highByte x 256) + lowByte
     CAN_message_t dataOut; // Can message obj
     dataOut.ext = 0;
-    dataOut.id = address;
+    dataOut.id = msg.address;
     dataOut.len = 8;
-    uint8 c = 0;
-    for (uint8 i = 0; i < 8; i += 2) {
-        c += i / 2;
-        dataOut.buf[i] = value[c] % 256;     // lowByte
-        dataOut.buf[i + 1] = value[c] / 256; // highByte
+    for (byte i = 0; i < 8; i += 2) {
+        if (msg.flagPos == i || msg.flagPos == i + 1) { // if lowByte or highByte is a flag byte
+            dataOut.buf[i] = msg.flag;                  // push stored flag byte to buf
+        } else if (msg.sensors[i]) {                    // checks if data is to suppose to be here
+            dataOut.buf[i] = msg.values[i];
+            dataOut.buf[i + 1] = msg.values[i + 1];
+        }
     }
+    Can0.write(dataOut);
 }
 
-void flagScan(const uint8 &flag, flagReader funcTbl[8]) {
+void flagScan(const byte &flag, flagReader funcTbl[8]) {
     if (flag) {                                             // check if flag has any value
-        for (uint8 bit = 0; bit < 8; ++bit) {               // iterate though flag bits
+        for (byte bit = 0; bit < 8; ++bit) {                // iterate though flag bits
             if (funcTbl[bit] && (flag >> bit) & 0B00000001) // check that we can do somthing if the bit is true
                 funcTbl[bit]();                             // call function based off bit pos
         }
     }
 }
 
-//TODO: figure out how data will be pushed to andriod
+//IMPROVE: instead of just storing values and pushing later, why not push as they are recieved? Consult leads!
+void readTTMsg(TTMsg &msg, const byte buf[8]) {
+    for (size_t i = 0; i < 8; i += 2) {
+        // i == lowByte
+        // i+1 == highByte
+        if (msg.flagPos == i) {                  // allows flags to be placed anywhere
+            flagScan(buf[i], msg.flagFuncs);     // iterate through lowByte bits for flags
+            msg.flag = buf[i];                   // store flag value
+        } else if (msg.flagPos == i + 1) {       // allows flags to be placed anywhere
+            flagScan(buf[i + 1], msg.flagFuncs); // iterate through highByte bits for flags
+            msg.flag = buf[i + 1];               // store flag value
+        } else if (msg.sensors[i]) {             // are we expecting data on this packet?
+            msg.values[i] = buf[i];              // don't encode as there is no immediate need
+            msg.values[i + 1] = buf[i + 1];
+        }
+    }
+}
+
+// Iterate through defined TTMsgs and push their data
+void teensyWrite() {
+    for (TTMsg &msg : TTMessages) {
+        writeTTMsg(msg);
+    }
+}
+
+// Iterate though defined TTMsgs and check if the address is one of theirs
+void teensyRead(const CAN_message_t &dataIn) { // IMPROVE: ensure that flag and sensor positions align up / don't overlap
+    for (TTMsg &msg : TTMessages) {
+        if (msg.address == dataIn.id) {
+            readTTMsg(msg, dataIn.buf); // id matches; interpret data based off msg structure
+            break;
+        };
+    }
+}
 
 // motor functions
+
 bool motorRead(const CAN_message_t &dataIn, motorDataPkt &packet) {
-    uint8 offst = packet.idOffset;
+    uint32 offst = packet.idOffset;
     // use map to check if id is within motor id range + motor offset
     byte pos = map(dataIn.id, TEMP1 + offst, VOLTAGE + offst, 0, 8);
     if (pos <= 7) {
@@ -141,15 +198,9 @@ bool motorRead(const CAN_message_t &dataIn, motorDataPkt &packet) {
 }
 
 void motorDecodeData(const CAN_message_t &dataIn, int *valueTbl) {
-    for (size_t i = 0; i < 4; i++) {
-        uint8 lowByte = i * 2;
-        uint8 highByte = lowByte + 1;
-        int full_data = (dataIn.buf[highByte] * 255) + dataIn.buf[lowByte];
-        if (dataIn.buf[highByte] < 128) {
-            valueTbl[i] = full_data;
-        } else if (dataIn.buf[highByte] > 128) {
-            valueTbl[i] = map(full_data, 65280, 32640, 0, -32640);
-        }
+    for (size_t i = 0; i < 8; i += 2) {
+        valueTbl[i] = dataIn.buf[i];
+        valueTbl[i + 1] = dataIn.buf[i + 1];
     }
 }
 
