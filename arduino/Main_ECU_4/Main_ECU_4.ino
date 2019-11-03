@@ -184,6 +184,35 @@ void teensyRead(const CAN_message_t &dataIn) { // IMPROVE: ensure that flag and 
 
 // motor functions
 
+// Max torque speed is 100 NM || 0 = Clockwise  1 = CounterClockwise
+void write_speed(int speed, bool m_direction, bool enable_pin, int id_off) {
+    CAN_message_t dataOut;                             // Can message obj
+    speed = (speed > 860) ? 860 : 1;                   // TODO: does this not mean %speed is always <= 100 after map?
+    uint32 percent_speed = map(speed, 0, 860, 0, 100); // Converts analog to motor values (NM) || 100NM = 1000 in Code
+    if (percent_speed < 1000) {                        // Checks if below 1000
+        //Calculations value = (high_byte x 256) + low_byte
+        byte low_byte = percent_speed % 256;
+        byte high_byte = percent_speed / 256;
+
+        //Setting up sending data parameters
+        dataOut.ext = 0;
+        dataOut.id = 0x0C0 + id_off; // Command message ID
+        dataOut.len = 8;
+        dataOut.buf[0] = low_byte; // NM
+        dataOut.buf[1] = high_byte;
+        dataOut.buf[2] = 0; // Speed
+        dataOut.buf[3] = 0;
+        dataOut.buf[4] = m_direction; // Direction
+        dataOut.buf[5] = enable_pin;  // Inverter enable byte
+        dataOut.buf[6] = 0;           // Last two are the maximum torque values || if 0 then defualt values are set
+        dataOut.buf[7] = 0;
+
+        Can0.write(dataOut);
+    } else {
+        Serial.println("Exceeding max torque value within write speed function.");
+    }
+}
+
 bool motorRead(const CAN_message_t &dataIn, motorDataPkt &packet) {
     uint32 offst = packet.idOffset;
     // use map to check if id is within motor id range + motor offset
