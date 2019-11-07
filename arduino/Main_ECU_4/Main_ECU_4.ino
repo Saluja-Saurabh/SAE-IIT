@@ -116,9 +116,7 @@ void loop() {
 }
 
 int decodeByte(const byte low, const byte high) { // probably will only be used to push to andriod
-    int full_data = (high * 255) + low;           // convert LH data to a value
-    //TODO: is there a diffrent way to get negatives? Also what value does 128 map to ?
-    return high < 128 ? full_data : map(full_data, 65280, 32640, 0, -32640); // remap for neg
+    return high*255 + low; //Does c++ cast the return type? seems to work?
 }
 
 void writeTTMsg(const TTMsg &msg) {
@@ -154,10 +152,10 @@ void readTTMsg(TTMsg &msg, const byte buf[8]) {
         // i+1 == highByte
         if (msg.flagPos == i) {                  // allows flags to be placed anywhere
             flagScan(buf[i], msg.flagFuncs);     // iterate through lowByte bits for flags
-            msg.flag = buf[i];                   // store flag value
+            msg.flag = buf[i];                   // store new flag value
         } else if (msg.flagPos == i + 1) {       // allows flags to be placed anywhere
             flagScan(buf[i + 1], msg.flagFuncs); // iterate through highByte bits for flags
-            msg.flag = buf[i + 1];               // store flag value
+            msg.flag = buf[i + 1];               // store new flag value
         } else if (msg.sensors[i]) {             // are we expecting data on this packet?
             msg.values[i] = buf[i];              // don't encode as there is no immediate need
             msg.values[i + 1] = buf[i + 1];
@@ -187,7 +185,7 @@ void teensyRead(const CAN_message_t &dataIn) { // IMPROVE: ensure that flag and 
 // Max torque speed is 100 NM || 0 = Clockwise  1 = CounterClockwise
 void write_speed(int speed, bool m_direction, bool enable_pin, int id_off) {
     CAN_message_t dataOut;                             // Can message obj
-    speed = (speed > 860) ? 860 : 1;                   // TODO: does this not mean %speed is always <= 100 after map?
+    speed = (speed > 860) ? 860 : 1;                   // IMPROVE: does this not mean %speed is always <= 100 after map?
     uint32 percent_speed = map(speed, 0, 860, 0, 100); // Converts analog to motor values (NM) || 100NM = 1000 in Code
     if (percent_speed < 1000) {                        // Checks if below 1000
         //Calculations value = (high_byte x 256) + low_byte
