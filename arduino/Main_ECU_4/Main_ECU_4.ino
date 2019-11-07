@@ -27,11 +27,14 @@ struct motorDataPkt {
 } motor0, motor1;
 
 // Used to identify what sensors go into what message
-enum sensor { // Pin0 must be sacrificed to the gods to have a nil value
-    NIL = 0,
+enum sensor { // both teensies two
+    NIL = 0,  // Pin0 must be sacrificed to the gods to have a nil value
+    //Teensy One
     fooSenPin = 5,
     barSenPin = 19,
     startBPin = 23,
+    //Teensy Two
+
 };
 
 // TODO: figure out how data will be pushed to andriod // andriod will decode bytes based off address
@@ -116,7 +119,7 @@ void loop() {
 }
 
 int decodeByte(const byte low, const byte high) { // probably will only be used to push to andriod
-    return high*255 + low; //Does c++ cast the return type? seems to work?
+    return high * 255 + low;                      //Does c++ cast the return type? seems to work?
 }
 
 void writeTTMsg(const TTMsg &msg) {
@@ -163,9 +166,14 @@ void readTTMsg(TTMsg &msg, const byte buf[8]) {
     }
 }
 
+void readSensorBlock(TTMsg &msg) {
+
+}
+
 // Iterate through defined TTMsgs and push their data
 void teensyWrite() {
     for (TTMsg &msg : TTMessages) {
+        readSensorBlock(msg); // read all the sensors related to the TTMsg
         writeTTMsg(msg);
     }
 }
