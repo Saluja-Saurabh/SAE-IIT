@@ -1,9 +1,8 @@
 #include <IFCT.h>                 // ImprovedFLexCanLibrary
-typedef uint32_t uint32;          // CAN_message_t id type
 typedef void (*flagReader)(void); // functions that are called when flag bits are true
 
 // TODO: decide on addresses for all the sensors and bms
-enum CanADR : uint32 {
+enum CanADR : uint32_t {
     // motor
     TEMP1 = 0x0A0,
     TEMP2 = 0x0A1,
@@ -21,7 +20,7 @@ enum CanADR : uint32 {
 
 //TODO: make motorPackets work with TTMsg
 struct motorDataPkt {
-    uint32 idOffset = 0;
+    uint32_t idOffset = 0;
     int values[8][8]; // not all the tables will be used eg. ANLIV & DIGIS
     bool faults[8][8];
 } motor0, motor1;
@@ -45,13 +44,16 @@ enum sensor { // both teensies two
     sensor      |   | S3|   | S2|   | S1|   | S0| // Where sensors are called (based off pos in TTMsg table | Byte#/2)
     FLAG pos    | F | F | F | F | F | F | F | F | // Valid FLAG placement NOTE: currently only one flag per msg
 */
-typedef struct TTMsg {       // Teensy to Teensy message definition/structure
-    uint32 address;          // identifies how the msg should be interpreted using it's address
-    sensor sensors[4];       // sensors that have data in this message; position in table sets where PKT goes (see ^)
-    char flagPos = -1;       // where the flag goes as shown above ^ NOTE: negative means no flag
-    flagReader flagFuncs[8]; // functions that are called when flag bit is true; limits each packet to one flag byte
-    byte flag;               // stored flag value
-    byte values[8];          // values from bytes that can be pushed after reading
+typedef struct TTMsg : CAN_message_t { // Teensy to Teensy message definition/structure
+    uint32_t address;                  // identifies how the msg should be interpreted using it's address
+    sensor sensors[4];                 // sensors that have data in this message; position in table sets where PKT goes (see ^)
+    char flagPos = -1;                 // where the flag goes as shown above ^ NOTE: negative means no flag
+    flagReader flagFuncs[8];           // functions that are called when flag bit is true; limits each packet to one flag byte
+    // V V V Don't change these values! V V V
+    byte flag;      // stored flag value
+    byte values[8]; // values from bytes that can be pushed after reading
+    dataOut.ext = 0;
+    dataOut.len = 8;
     // Maybe add single packet interpreter for special cases such as motor? default to normal pkt reading?
 } TTMsg;
 
@@ -122,18 +124,21 @@ int decodeByte(const byte low, const byte high) { // probably will only be used 
     return high * 255 + low;                      //Does c++ cast the return type? seems to work?
 }
 
+int *encodeByte(const int value) {               // probably will only be used to push to andriod
+    return new int[2]{value / 255, value % 255}; //Does c++ cast the return type? seems to work?
+}
+
 void writeTTMsg(const TTMsg &msg) {
     // CAN value conversion : value = (highByte x 256) + lowByte
     CAN_message_t dataOut; // Can message obj
-    dataOut.ext = 0;
     dataOut.id = msg.address;
-    dataOut.len = 8;
     for (byte i = 0; i < 8; i += 2) {
         if (msg.flagPos == i || msg.flagPos == i + 1) { // if lowByte or highByte is a flag byte
             dataOut.buf[i] = msg.flag;                  // push stored flag byte to buf
         } else if (msg.sensors[i]) {                    // checks if data is to suppose to be here
-            dataOut.buf[i] = msg.values[i];
-            dataOut.buf[i + 1] = msg.values[i + 1];
+            int val = analogRead(msg.sensors[i]);
+            dataOut.buf[i] = val % 255;
+            dataOut.buf[i + 1] = val / 255;
         }
     }
     Can0.write(dataOut);
@@ -166,14 +171,9 @@ void readTTMsg(TTMsg &msg, const byte buf[8]) {
     }
 }
 
-void readSensorBlock(TTMsg &msg) {
-
-}
-
 // Iterate through defined TTMsgs and push their data
 void teensyWrite() {
     for (TTMsg &msg : TTMessages) {
-        readSensorBlock(msg); // read all the sensors related to the TTMsg
         writeTTMsg(msg);
     }
 }
@@ -192,10 +192,10 @@ void teensyRead(const CAN_message_t &dataIn) { // IMPROVE: ensure that flag and 
 
 // Max torque speed is 100 NM || 0 = Clockwise  1 = CounterClockwise
 void write_speed(int speed, bool m_direction, bool enable_pin, int id_off) {
-    CAN_message_t dataOut;                             // Can message obj
-    speed = (speed > 860) ? 860 : 1;                   // IMPROVE: does this not mean %speed is always <= 100 after map?
-    uint32 percent_speed = map(speed, 0, 860, 0, 100); // Converts analog to motor values (NM) || 100NM = 1000 in Code
-    if (percent_speed < 1000) {                        // Checks if below 1000
+    CAN_message_t dataOut;                               // Can message obj
+    speed = (speed > 860) ? 860 : 1;                     // IMPROVE: does this not mean %speed is always <= 100 after map?
+    uint32_t percent_speed = map(speed, 0, 860, 0, 100); // Converts analog to motor values (NM) || 100NM = 1000 in Code
+    if (percent_speed < 1000) {                          // Checks if below 1000
         //Calculations value = (high_byte x 256) + low_byte
         byte low_byte = percent_speed % 256;
         byte high_byte = percent_speed / 256;
@@ -220,7 +220,7 @@ void write_speed(int speed, bool m_direction, bool enable_pin, int id_off) {
 }
 
 bool motorRead(const CAN_message_t &dataIn, motorDataPkt &packet) {
-    uint32 offst = packet.idOffset;
+    uint32_t offst = packet.idOffset;
     // use map to check if id is within motor id range + motor offset
     byte pos = map(dataIn.id, TEMP1 + offst, VOLTAGE + offst, 0, 8);
     if (pos <= 7) {
