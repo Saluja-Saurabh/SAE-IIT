@@ -1,4 +1,5 @@
 #include <IFCT.h>                 // ImprovedFLexCanLibrary
+// typedef void (*msgInterrupt)(TTMsg &msg); // for message specialization such as a message block with only flags
 typedef void (*flagReader)(void); // functions that are called when flag bits are true
 
 // TODO: decide on addresses for all the sensors and bms
@@ -8,14 +9,13 @@ enum CanADR : uint32_t {
     TEMP2 = 0x0A1,
     TEMP3 = 0x0A2,
     ANLIV = 0x0A3,
-    DIGIS = 0x0A4,
-    MOTOR_POS = 0x0A5,
+    // DIGIS = 0x0A4,
+    MOTORPOS = 0x0A5,
     CURRENT = 0x0A6,
     VOLTAGE = 0x0A7,
     FAULT = 0x0AB,
-    // Yes
-    FOO = 0x0FF,
-    BAR = 0x0BB,
+    // IDK
+    INFO = 0x1A5,
 };
 
 //TODO: make motorPackets work with TTMsg
@@ -25,15 +25,57 @@ struct motorDataPkt {
     bool faults[8][8];
 } motor0, motor1;
 
-// Used to identify what sensors go into what message
-enum sensor { // both teensies two
-    NIL = 0,  // Pin0 must be sacrificed to the gods to have a nil value
-    //Teensy One
-    fooSenPin = 5,
-    barSenPin = 19,
-    startBPin = 23,
-    //Teensy Two
+// TODO: add pushAndriod method to Serial.write message blocks
+// TODO: make teensy to andriod decode bytes
+// Used to identify what data goes into what message
+enum data {  // both teensies two
+    NIL = 0, // Pin0 must be sacrificed to the gods to have a nil value
 
+    // Motor data
+    // TEMP1
+    PhaseA = true,
+    PhaseB = true,
+    PhaseC = true,
+    DriverBoard = true,
+    // TEMP2
+    ControlBoard = true,
+    null = true,
+    null = true,
+    null = true,
+    // TEMP3
+    null = true,
+    null = true,
+    motor = true,
+    torqueShudder = true,
+    //MOTORPOS
+    angle = true,
+    anglrVel = true,
+    electricalFreq = true,
+    deltaResolver = true, // Unused
+    //CURRENT
+    PhaseA = true,
+    PhaseB = true,
+    PhaseC = true,
+    DCBus = true,
+    //VOLTAGE
+    DCBus = true,
+    Output = true,
+    VAB_Vd = true,
+    VBC_Vq = true,
+
+    // Teensy One
+    startButtonPin = 14,
+    steeringPin = 15,
+    brakePin = 16,
+    pedalPin = 17,
+    lightsPin = 18,
+
+    // Teensy Two
+    TSMP = 14,
+    // IMD = 15, // ????????????????????????
+    gyro = 16,
+    brakeLight = 17,
+    pump = 18,
 };
 
 // TODO: figure out how data will be pushed to andriod // andriod will decode bytes based off address
@@ -41,51 +83,35 @@ enum sensor { // both teensies two
     Byte # (map)| 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 | // byte index in CAN message
     H&L 'packet'        | H | L |   =   |  PKT  | // L and H bytes must be next to each other, referred as packets(PKT)
     PKT pos     |  PKT  |  PKT  |  PKT  |  PKT  | // Valid PKT placement NOTE: is set as seprate H & L in actual buffer
-    sensor      |   | S3|   | S2|   | S1|   | S0| // Where sensors are called (based off pos in TTMsg table | Byte#/2)
-    FLAG pos    | F | F | F | F | F | F | F | F | // Valid FLAG placement NOTE: currently only one flag per msg
+    data        |   | S3|   | S2|   | S1|   | S0| // Where data funcs are called (based off pos in TTMsg table | Byte#/2)
+    FLAG pos    | F7| F6| F5| F4| F3| F2| F1| F0| // Valid FLAG placement NOTE: must start at 0 and cannot be a broken layout
 */
 typedef struct TTMsg : CAN_message_t { // Teensy to Teensy message definition/structure
-    uint32_t address;                  // identifies how the msg should be interpreted using it's address
-    sensor sensors[4];                 // sensors that have data in this message; position in table sets where PKT goes (see ^)
-    char flagPos = -1;                 // where the flag goes as shown above ^ NOTE: negative means no flag
-    flagReader flagFuncs[8];           // functions that are called when flag bit is true; limits each packet to one flag byte
+    uint32_t id;                       // identifies how the msg should be interpreted using it's address
+    data sensors[4];                   // data that have data in this message; position in table sets where PKT goes (see ^)
+    flagReader flagFuncs[8];           // functions that are called when a flag bit is true | limits callbacks to flag byte 0
+    byte offset;                       // now any data can have an offset for duplicates | the 2 motors in this case
     // V V V Don't change these values! V V V
-    byte flag;      // stored flag value
     byte values[8]; // values from bytes that can be pushed after reading
-    dataOut.ext = 0;
-    dataOut.len = 8;
-    // Maybe add single packet interpreter for special cases such as motor? default to normal pkt reading?
 } TTMsg;
 
 /* ----- ECU specific data ----- */
 
-// more logical examples
+TTMsg info, TEMP1;
 void preCharge() {
     Serial.println("NNNNNNNYYYYOOWWMMMMM!"); //called when flag bit 0 == true
 }
 
 // this message only checks the flag
-TTMsg startButton{
-    BAR,
+TTMsg info{
+    INFO,
     {},
-    0,
     {preCharge},
-};
-
-// two packets used in this message
-TTMsg fooBar{
-    FOO,
-    {
-        //Sensor table also tells reciving ECUs what data they should be expecting
-        fooSenPin,
-        barSenPin,
-    },
 };
 
 // load all the ECU specific messages
 TTMsg TTMessages[]{
-    startButton,
-    fooBar,
+    info,
 };
 
 /* ----- END ECU specific data ----- */
@@ -117,15 +143,18 @@ void loop() {
             teensyRead(dataIn);
         }
     }
-    teensyWrite();
+    for (TTMsg &msg : TTMessages) {
+        updateSensor();
+        teensyWrite();
+    }
 }
 
 int decodeByte(const byte low, const byte high) { // probably will only be used to push to andriod
     return high * 255 + low;                      //Does c++ cast the return type? seems to work?
 }
 
-int *encodeByte(const int value) {               // probably will only be used to push to andriod
-    return new int[2]{value / 255, value % 255}; //Does c++ cast the return type? seems to work?
+int *encodeByte(const int value) { // probably will only be used to push to andriod
+    return new int[2]{value / 255, value % 255};
 }
 
 void writeTTMsg(const TTMsg &msg) {
@@ -141,7 +170,7 @@ void writeTTMsg(const TTMsg &msg) {
             dataOut.buf[i + 1] = val / 255;
         }
     }
-    Can0.write(dataOut);
+    Can0.write(msg);
 }
 
 void flagScan(const byte &flag, flagReader funcTbl[8]) {
@@ -181,7 +210,7 @@ void teensyWrite() {
 // Iterate though defined TTMsgs and check if the address is one of theirs
 void teensyRead(const CAN_message_t &dataIn) { // IMPROVE: ensure that flag and sensor positions align up / don't overlap
     for (TTMsg &msg : TTMessages) {
-        if (msg.address == dataIn.id) {
+        if (msg.id == dataIn.id) {
             readTTMsg(msg, dataIn.buf); // id matches; interpret data based off msg structure
             break;
         };
