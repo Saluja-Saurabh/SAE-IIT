@@ -1,6 +1,12 @@
-#include <IFCT.h>                 // ImprovedFLexCanLibrary
-// typedef void (*msgInterrupt)(TTMsg &msg); // for message specialization such as a message block with only flags
-typedef void (*flagReader)(void); // functions that are called when flag bits are true
+/*
+    SAE - 2019
+    Teensy 3.6 ECU x2
+    Version 4
+*/
+
+#include <IFCT.h>                      // ImprovedFLexCanLibrary
+typedef void (*msgHandle)(TTMsg &msg); // for message specialization such as a message block with only flags
+typedef void (*flagReader)(void);      // functions that are called when flag bits are true
 
 // TODO: decide on addresses for all the sensors and bms
 enum CanADR : uint32_t {
@@ -21,10 +27,11 @@ enum CanADR : uint32_t {
 //TODO: make motorPackets work with TTMsg
 struct motorDataPkt {
     uint32_t idOffset = 0;
-    int values[8][8]; // not all the tables will be used eg. ANLIV & DIGIS
-    bool faults[8][8];
+    int values[8][8];  // not all the tables will be used eg. ANLIV & DIGIS
+    bool faults[8][8]; //TODO: what should we do with faults?
 } motor0, motor1;
 
+// Push data to andriod using Teensy UART | Eg. Serial1.write();
 // TODO: add pushAndriod method to Serial.write message blocks
 // TODO: make teensy to andriod decode bytes
 // Used to identify what data goes into what message
@@ -78,7 +85,6 @@ enum data {  // both teensies two
     pump = 18,
 };
 
-// TODO: figure out how data will be pushed to andriod // andriod will decode bytes based off address
 /*
     Byte # (map)| 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 | // byte index in CAN message
     H&L 'packet'        | H | L |   =   |  PKT  | // L and H bytes must be next to each other, referred as packets(PKT)
@@ -91,13 +97,13 @@ typedef struct TTMsg : CAN_message_t { // Teensy to Teensy message definition/st
     data sensors[4];                   // data that have data in this message; position in table sets where PKT goes (see ^)
     flagReader flagFuncs[8];           // functions that are called when a flag bit is true | limits callbacks to flag byte 0
     byte offset;                       // now any data can have an offset for duplicates | the 2 motors in this case
-    // V V V Don't change these values! V V V
-    byte values[8]; // values from bytes that can be pushed after reading
-} TTMsg;
+    msgHandle handle;                  // function that can handle the message instead | for specialization of messages
+    byte values[8];                    // values from bytes that can be pushed after reading
+    bool containsFlag;                 // used for memoization
+} TTMsg;                               //Flags can be extended to use two bytes if it is really neccessary
 
 /* ----- ECU specific data ----- */
 
-TTMsg info, TEMP1;
 void preCharge() {
     Serial.println("NNNNNNNYYYYOOWWMMMMM!"); //called when flag bit 0 == true
 }
@@ -128,6 +134,15 @@ void setup() {
             motor1.values[j][k] = 0;
         }
     }
+
+    for (size_t i = 0; i < sizeof(TTMessages); i++) {
+        if (*(TTMessages[i].flagFuncs)) { // use bool to see if flags are at byte 0 | is this better? idk
+            TTMessages[i].containsFlag = true;
+            if (TTMessages[i].sensors[4])
+                Serial.println("WARNING: FLAG AND MESSAGE CONFLICT! ID:" + TTMessages[i].id);
+        }
+    }
+
     pinMode(2, OUTPUT); // Fusion Tech's Dual CAN-Bus R pin switch
     digitalWrite(2, LOW);
     Can0.setBaudRate(1000000); // Speeed
@@ -281,3 +296,8 @@ void motorReadFault(const CAN_message_t &dataIn, bool faultTbl[8][8]) {
         }
     }
 }
+
+/*
+    "Yeet"
+        -Bobamba
+                    */
