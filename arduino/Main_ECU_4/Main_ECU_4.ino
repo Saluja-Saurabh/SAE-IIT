@@ -32,7 +32,7 @@ struct motorDataPkt {
 } motor0, motor1;
 
 // Push data to andriod using Teensy UART | Eg. Serial1.write();
-// TODO: add pushAndriod method to Serial.write message blocks
+// TODO: add pushAndriod method to Serial1.write message blocks
 // TODO: make teensy to andriod decode bytes
 // Used to identify what data goes into what message
 enum data {  // both teensies two
@@ -90,7 +90,7 @@ enum data {  // both teensies two
     H&L 'packet'        | H | L |   =   |  PKT  | // L and H bytes must be next to each other, referred as packets(PKT)
     PKT pos     |  PKT  |  PKT  |  PKT  |  PKT  | // Valid PKT placement NOTE: is set as seprate H & L in actual buffer
     data        |   | S3|   | S2|   | S1|   | S0| // Where data funcs are called (based off pos in TTMsg table | Byte#/2)
-    FLAG pos    | F7| F6| F5| F4| F3| F2| F1| F0| // Valid FLAG placement NOTE: must start at 0 and cannot be a broken layout
+    FLAG pos    | F7| F6| F5| F4| F3| F2| F1| F0| // Flag bytes if they exist NOTE: only byte 0 will react
 */
 typedef struct TTMsg : CAN_message_t { // Teensy to Teensy message definition/structure
     uint32_t id;                       // identifies how the msg should be interpreted using it's address
@@ -100,7 +100,7 @@ typedef struct TTMsg : CAN_message_t { // Teensy to Teensy message definition/st
     msgHandle handle;                  // function that can handle the message instead | for specialization of messages
     byte values[8];                    // values from bytes that can be pushed after reading
     bool containsFlag;                 // used for memoization
-} TTMsg;                               //Flags can be extended to use two bytes if it is really neccessary
+} TTMsg;                               // IMPROVE: Flags can be extended to handle two bytes if it is really neccessary
 
 /* ----- ECU specific data ----- */
 
@@ -138,7 +138,7 @@ void setup() {
     for (size_t i = 0; i < sizeof(TTMessages); i++) {
         if (*(TTMessages[i].flagFuncs)) { // use bool to see if flags are at byte 0 | is this better? idk
             TTMessages[i].containsFlag = true;
-            if (TTMessages[i].sensors[4])
+            if (TTMessages[i].sensors[4]) // if flags exist and so do all four sensors then this is a problem
                 Serial.println("WARNING: FLAG AND MESSAGE CONFLICT! ID:" + TTMessages[i].id);
         }
     }
@@ -172,45 +172,32 @@ int *encodeByte(const int value) { // probably will only be used to push to andr
     return new int[2]{value / 255, value % 255};
 }
 
-void writeTTMsg(const TTMsg &msg) {
-    // CAN value conversion : value = (highByte x 256) + lowByte
-    CAN_message_t dataOut; // Can message obj
-    dataOut.id = msg.address;
-    for (byte i = 0; i < 8; i += 2) {
-        if (msg.flagPos == i || msg.flagPos == i + 1) { // if lowByte or highByte is a flag byte
-            dataOut.buf[i] = msg.flag;                  // push stored flag byte to buf
-        } else if (msg.sensors[i]) {                    // checks if data is to suppose to be here
-            int val = analogRead(msg.sensors[i]);
-            dataOut.buf[i] = val % 255;
-            dataOut.buf[i + 1] = val / 255;
-        }
-    }
-    Can0.write(msg);
-}
-
 void flagScan(const byte &flag, flagReader funcTbl[8]) {
-    if (flag) {                                             // check if flag has any value
+    if (flag) {                                             // check if flag has any true bits
         for (byte bit = 0; bit < 8; ++bit) {                // iterate though flag bits
-            if (funcTbl[bit] && (flag >> bit) & 0B00000001) // check that we can do somthing if the bit is true
+            if (funcTbl[bit] && (flag >> bit) & 0B00000001) // check that we can do something if the bit is true
                 funcTbl[bit]();                             // call function based off bit pos
         }
     }
 }
 
+void writeTTMsg(const TTMsg &msg) { // TODO: can't we just get rid of this?
+    Can0.write(msg);
+}
+
 //IMPROVE: instead of just storing values and pushing later, why not push as they are recieved? Consult leads!
 void readTTMsg(TTMsg &msg, const byte buf[8]) {
-    for (size_t i = 0; i < 8; i += 2) {
-        // i == lowByte
-        // i+1 == highByte
-        if (msg.flagPos == i) {                  // allows flags to be placed anywhere
-            flagScan(buf[i], msg.flagFuncs);     // iterate through lowByte bits for flags
-            msg.flag = buf[i];                   // store new flag value
-        } else if (msg.flagPos == i + 1) {       // allows flags to be placed anywhere
-            flagScan(buf[i + 1], msg.flagFuncs); // iterate through highByte bits for flags
-            msg.flag = buf[i + 1];               // store new flag value
-        } else if (msg.sensors[i]) {             // are we expecting data on this packet?
-            msg.values[i] = buf[i];              // don't encode as there is no immediate need
-            msg.values[i + 1] = buf[i + 1];
+    size_t i = 0;
+    if (msg.containsFlag) {              // Readflags if they are expected
+        flagScan(buf[i], msg.flagFuncs); // Only checking byte 0
+        msg.values[i] = buf[i];          // Store byte 0 of flags
+        msg.values[i + 1] = buf[i + 1];  // also stores byte 1 for completion sake
+        i = 2;                           // Skip flag bytes
+    }
+    for (i = i; i < 8; i += 2) {
+        if (msg.sensors[i]) {               // are we expecting data on this packet?
+            msg.values[i] = buf[i];         // don't encode as there is no immediate need
+            msg.values[i + 1] = buf[i + 1]; // no encode
         }
     }
 }
@@ -222,11 +209,11 @@ void teensyWrite() {
     }
 }
 
-// Iterate though defined TTMsgs and check if the address is one of theirs
-void teensyRead(const CAN_message_t &dataIn) { // IMPROVE: ensure that flag and sensor positions align up / don't overlap
+// Iterate through defined TTMsgs and check if the address is one of theirs
+void teensyRead(const CAN_message_t &dataIn) {
     for (TTMsg &msg : TTMessages) {
         if (msg.id == dataIn.id) {
-            readTTMsg(msg, dataIn.buf); // id matches; interpret data based off msg structure
+            readTTMsg(msg, dataIn.buf); // id matches; interpret data based off matching msg structure
             break;
         };
     }
