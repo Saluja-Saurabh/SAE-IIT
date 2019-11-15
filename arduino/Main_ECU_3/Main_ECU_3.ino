@@ -183,6 +183,7 @@ void loop() {
     all_logic();
     // Takes avarge with error check and sends the position for the motor controller.
     int accelerator_value = read_accelerator_value();
+    
     write_speed(accelerator_value, 1, enable_bit, motor_1.id_offset); // Motor 1(2) right
     write_speed(accelerator_value, 0, enable_bit, motor_0.id_offset); // Motor 0(1) left
 }

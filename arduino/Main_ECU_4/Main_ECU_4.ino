@@ -46,12 +46,12 @@ enum data {  // both teensies two
     DriverBoard = true,
     // TEMP2
     ControlBoard = true,
-    null = true,
-    null = true,
-    null = true,
+    RTD1 = true,
+    RTD2 = true,
+    RTD3 = true,
     // TEMP3
-    null = true,
-    null = true,
+    RTD4 = true,
+    RTD5 = true,
     motor = true,
     torqueShudder = true,
     //MOTORPOS
@@ -76,6 +76,8 @@ enum data {  // both teensies two
     brakePin = 16,
     pedalPin = 17,
     lightsPin = 18,
+    accelerator_1 = 21,
+    accelerator_2 = 21,
 
     // Teensy Two
     TSMP = 14,
@@ -90,13 +92,13 @@ enum data {  // both teensies two
     H&L 'packet'        | H | L |   =   |  PKT  | // L and H bytes must be next to each other, referred as packets(PKT)
     PKT pos     |  PKT  |  PKT  |  PKT  |  PKT  | // Valid PKT placement NOTE: is set as seprate H & L in actual buffer
     data        |   | S3|   | S2|   | S1|   | S0| // Where data funcs are called (based off pos in TTMsg table | Byte#/2)
-    FLAG pos    | F7| F6| F5| F4| F3| F2| F1| F0| // Flag bytes if they exist NOTE: only byte 0 will react
+    FLAG pos    | F1| F0|                         // Flag bytes if they exist NOTE: only byte 0 will call functions
 */
 typedef struct TTMsg : CAN_message_t { // Teensy to Teensy message definition/structure
     uint32_t id;                       // identifies how the msg should be interpreted using it's address
-    data sensors[4];                   // data that have data in this message; position in table sets where PKT goes (see ^)
-    flagReader flagFuncs[8];           // functions that are called when a flag bit is true | limits callbacks to flag byte 0
+    data packets[4];                   // data that have data in this message; position in table sets where PKT goes (see ^)
     byte offset;                       // now any data can have an offset for duplicates | the 2 motors in this case
+    flagReader flagFuncs[8];           // functions that are called when a flag bit is true | limits callbacks to flag byte 0
     msgHandle handle;                  // function that can handle the message instead | for specialization of messages
     byte values[8];                    // values from bytes that can be pushed after reading
     bool containsFlag;                 // used for memoization
@@ -104,21 +106,67 @@ typedef struct TTMsg : CAN_message_t { // Teensy to Teensy message definition/st
 
 /* ----- ECU specific data ----- */
 
-void preCharge() {
-    Serial.println("NNNNNNNYYYYOOWWMMMMM!"); //called when flag bit 0 == true
+byte MOTOROFFSET = 0x30;
+
+bool carUnlocked = false;
+
+void initalizeCar() {   // Start button has been pressed
+    carUnlocked = true; // Let the car be able to move
+    // TODO: include precharge sequence
 }
 
 // this message only checks the flag
 TTMsg info{
     INFO,
     {},
-    {preCharge},
+    0,
+    {initalizeCar},
+};
+
+TTMsg motorTemp1{
+    TEMP1,
+    {
+        PhaseA,
+        PhaseB,
+        PhaseC,
+        DriverBoard,
+    },
+    MOTOROFFSET,
+};
+
+TTMsg motorTemp2{
+    TEMP2,
+    {
+        ControlBoard,
+        RTD1,
+        RTD2,
+        RTD3,
+    },
+    MOTOROFFSET,
 };
 
 // load all the ECU specific messages
 TTMsg TTMessages[]{
     info,
 };
+
+void initalizeMsg(TTMsg &msg) {
+    if (*(msg.flagFuncs)) { // use bool to see if flags are at byte 0 | is this better? idk
+        msg.containsFlag = true;
+        if (msg.packets[4]) { // if a flags exist and so do all four data slots then this is a problem
+            Serial.println("WARNING: FLAG AND MESSAGE CONFLICT! ID:" + msg.id);
+        } // TODO: find a way to display errors
+    }
+}
+
+TTMsg offsetMsg(TTMsg &msg) {
+    TTMsg dup;
+    dup.id = msg.id + msg.offset;
+    *dup.packets = *msg.packets;
+    *dup.flagFuncs = *msg.flagFuncs;
+    dup.handle = msg.handle;
+    return dup;
+}
 
 /* ----- END ECU specific data ----- */
 
@@ -136,10 +184,9 @@ void setup() {
     }
 
     for (size_t i = 0; i < sizeof(TTMessages); i++) {
-        if (*(TTMessages[i].flagFuncs)) { // use bool to see if flags are at byte 0 | is this better? idk
-            TTMessages[i].containsFlag = true;
-            if (TTMessages[i].sensors[4]) // if flags exist and so do all four sensors then this is a problem
-                Serial.println("WARNING: FLAG AND MESSAGE CONFLICT! ID:" + TTMessages[i].id);
+        initalizeMsg(TTMessages[i]);
+        if (TTMessages[i].offset) {
+            initalizeMsg(offsetMsg(TTMessages[i]));
         }
     }
 
@@ -158,25 +205,35 @@ void loop() {
             teensyRead(dataIn);
         }
     }
-    for (TTMsg &msg : TTMessages) {
-        updateSensor();
-        teensyWrite();
+    for (TTMsg &msg : TTMessages) { // Iterate through defined TTMsgs and push their data
+        updateData(msg);
+        writeTTMsg(msg);
+    }
+}
+
+void updateData(TTMsg &msg) {
+    if (msg.handle) {
+        msg.handle(msg);
+    } else {
+        for (int i = 0; i < 8; i += 2) {
+            if (msg.packets[i / 2]) { // If we have a sensor for this packet read and store it
+                int val = analogRead(msg.packets[i / 2]);
+                msg.values[i] = val / 255;
+                msg.values[i + 1] = val % 255;
+            }
+        }
     }
 }
 
 int decodeByte(const byte low, const byte high) { // probably will only be used to push to andriod
-    return high * 255 + low;                      //Does c++ cast the return type? seems to work?
-}
-
-int *encodeByte(const int value) { // probably will only be used to push to andriod
-    return new int[2]{value / 255, value % 255};
+    return high * 255 + low;                      // Does c++ cast the return type? seems to work?
 }
 
 void flagScan(const byte &flag, flagReader funcTbl[8]) {
-    if (flag) {                                             // check if flag has any true bits
-        for (byte bit = 0; bit < 8; ++bit) {                // iterate though flag bits
-            if (funcTbl[bit] && (flag >> bit) & 0B00000001) // check that we can do something if the bit is true
-                funcTbl[bit]();                             // call function based off bit pos
+    if (flag) {                                    // check if flag has any true bits
+        for (byte bit = 0; bit < 8; ++bit) {       // iterate though flag bits
+            if (funcTbl[bit] && (flag >> bit) & 1) // check that we can do something if the bit is true
+                funcTbl[bit]();                    // call function based off bit pos
         }
     }
 }
@@ -195,17 +252,10 @@ void readTTMsg(TTMsg &msg, const byte buf[8]) {
         i = 2;                           // Skip flag bytes
     }
     for (i = i; i < 8; i += 2) {
-        if (msg.sensors[i]) {               // are we expecting data on this packet?
+        if (msg.packets[i]) {               // are we expecting data on this packet?
             msg.values[i] = buf[i];         // don't encode as there is no immediate need
             msg.values[i + 1] = buf[i + 1]; // no encode
         }
-    }
-}
-
-// Iterate through defined TTMsgs and push their data
-void teensyWrite() {
-    for (TTMsg &msg : TTMessages) {
-        writeTTMsg(msg);
     }
 }
 
@@ -220,6 +270,23 @@ void teensyRead(const CAN_message_t &dataIn) {
 }
 
 // motor functions
+
+// TODO: test what the accelerators are outputting
+void motorPushSpeed(TTMsg &msg) {
+    int average = 0;
+    int accelerator0 = analogRead(accelerator_1);
+    int accelerator1 = analogRead(accelerator_2);
+    if (accelerator0 < 5 || accelerator1 < 5) { // To check and clean if the value is jumping around
+        accelerator0 = 0;
+        accelerator1 = 0;
+    }
+    float errorcheck = (abs(accelerator0 - accelerator1) / accelerator1); // Percent error
+    if (errorcheck <= 0.1) {                                              // if the error is less than 10%
+        average = (accelerator0 + accelerator1) / 2;
+    } else {
+        Serial.println("Error accelerator reading");
+    }
+}
 
 // Max torque speed is 100 NM || 0 = Clockwise  1 = CounterClockwise
 void write_speed(int speed, bool m_direction, bool enable_pin, int id_off) {
@@ -240,7 +307,7 @@ void write_speed(int speed, bool m_direction, bool enable_pin, int id_off) {
         dataOut.buf[2] = 0; // Speed
         dataOut.buf[3] = 0;
         dataOut.buf[4] = m_direction; // Direction
-        dataOut.buf[5] = enable_pin;  // Inverter enable byte
+        dataOut.buf[5] = carUnlocked; // Inverter enable byte
         dataOut.buf[6] = 0;           // Last two are the maximum torque values || if 0 then defualt values are set
         dataOut.buf[7] = 0;
 
