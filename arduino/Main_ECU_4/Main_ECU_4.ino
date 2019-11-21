@@ -2,9 +2,10 @@
     SAE - 2019
     Teensy 3.6 ECU x2
     Version 4
+    
 */
 
-#include <IFCT.h>                      // ImprovedFLexCanLibrary
+#include <IFCT.h>                      // ImprovedFLexCanLibrary using only Can0
 typedef bool (*msgHandle)(TTMsg &msg); // for message specialization such as a message block with only flags
 typedef void (*flagReader)(void);      // functions that are called when flag bits are true
 
@@ -25,11 +26,8 @@ enum CanADR : uint32_t {
     INFO = 0x1A5,
 };
 
-// Push data to andriod using Teensy UART | Eg. Serial1.write();
-// TODO: add pushAndriod method to Serial1.write message blocks
-// TODO: make teensy to andriod decode bytes
 // Used to identify what data goes into what message
-enum data {  // both teensies two
+enum data {
     NIL = 0, // Pin0 must be sacrificed to the gods to have a nil value
 
     // Motor data
@@ -99,9 +97,8 @@ typedef struct TTMsg : CAN_message_t { // Teensy to Teensy message definition/st
     data flagValues[8];                // sensor pins to read and push onto the flag byte | only flag byte 0
     msgHandle handle;                  // function that can handle the message instead | for specialization of messages
     bool sideHandle;                   // handle is called alongside the acutal proccessing of msg
-    byte values[8];                    // values from bytes that can be pushed after reading
+    byte buf[8];                       // values from bytes that will be pushed after reading
     bool containsFlag;                 // used for memoization
-    uint8_t buf[8];                    // data
 } TTMsg;                               // IMPROVE: Flags can be extended to handle two bytes if it is really neccessary
 
 /* ----- ECU specific data ----- */
@@ -116,13 +113,13 @@ void initalizeCar() {   // Start button has been pressed
 }
 
 // TODO: are the car flaps a variable or switch output?
-void flapsUp() {
-    analogWrite(servo_pwm, 0);
-    digitalWriteFast(sig_8_2_on_off, HIGH);
-}
+// void flapsUp() {
+//     analogWrite(servo_pwm, 0);
+//     digitalWriteFast(sig_8_2_on_off, HIGH);
+// }
 
-void flapsDown() {
-}
+// void flapsDown() {
+// }
 
 bool storeflag(TTMsg &msg) {
     return true;
@@ -158,6 +155,7 @@ TTMsg WriteSpeed{
     motorWriteSpeed,
 };
 
+// FIXME: issue with struct inheritance and initalization of TTMsg?
 TTMsg motorTemp1{
     TEMP1,
     {
@@ -279,7 +277,7 @@ void setup() {
 }
 
 void loop() {
-    toggleLED();          // toggle teensy led each loop
+    toggleLED();          // TODO: disable on final build to save a few cycles
     CAN_message_t dataIn; // Can message obj
     if (Can0.read(dataIn)) {
         teensyRead(dataIn);
@@ -297,8 +295,8 @@ void updateData(TTMsg &msg) {
     for (int i = 0; i < 8; i += 2) {
         if (msg.packets[i / 2]) { // If we have a sensor for this packet read and store it
             int val = analogRead(msg.packets[i / 2]);
-            msg.values[i] = val / 255;
-            msg.values[i + 1] = val % 255;
+            msg.buf[i] = val / 255;
+            msg.buf[i + 1] = val % 255;
         }
     }
 }
@@ -325,14 +323,14 @@ void readTTMsg(TTMsg &msg, const byte buf[8]) {
     size_t i = 0;
     if (msg.containsFlag) {              // Readflags if they are expected
         flagScan(buf[i], msg.flagFuncs); // Only checking byte 0
-        msg.values[i] = buf[i];          // Store byte 0 of flags
-        msg.values[i + 1] = buf[i + 1];  // also stores byte 1 for completion sake
+        msg.buf[i] = buf[i];             // Store byte 0 of flags
+        msg.buf[i + 1] = buf[i + 1];     // also stores byte 1 for completion sake
         i = 2;                           // Skip flag bytes
     }
     for (i = i; i < 8; i += 2) {
-        if (msg.packets[i]) {               // are we expecting data on this packet?
-            msg.values[i] = buf[i];         // don't encode as there is no immediate need
-            msg.values[i + 1] = buf[i + 1]; // no encode
+        if (msg.packets[i]) {            // are we expecting data on this packet?
+            msg.buf[i] = buf[i];         // don't encode as there is no immediate need
+            msg.buf[i + 1] = buf[i + 1]; // no encode
         }
     }
 }
@@ -385,40 +383,6 @@ bool motorWriteSpeed(TTMsg &msg) {
     writeTTMsg(msg);
 
     return false; // Don't continue normal TTMsg operation
-}
-
-bool motorRead(const CAN_message_t &dataIn, motorDataPkt &packet) {
-    uint32_t offst = packet.idOffset;
-    // use map to check if id is within motor id range + motor offset
-    byte pos = map(dataIn.id, TEMP1 + offst, VOLTAGE + offst, 0, 8);
-    if (pos <= 7) {
-        motorDecodeData(dataIn, packet.values[pos]);
-        return true;
-    } else if (dataIn.id == FAULT + offst) {
-        motorReadFault(dataIn, packet.faults);
-    }
-    return false;
-}
-
-void motorDecodeData(const CAN_message_t &dataIn, int *valueTbl) {
-    for (size_t i = 0; i < 8; i += 2) {
-        valueTbl[i] = dataIn.buf[i];
-        valueTbl[i + 1] = dataIn.buf[i + 1];
-    }
-}
-
-void motorReadFault(const CAN_message_t &dataIn, bool faultTbl[8][8]) {
-    for (int col = 0; col < 8; ++col) {                        // for each byte
-        if (dataIn.buf[col]) {                                 // If the byte has info
-            for (int row = 0; row < 8; ++row) {                // for each bit
-                if (((dataIn.buf[col] >> row) & 0B00000001)) { // If each bit is true, store value
-                    faultTbl[col][row] = 1;
-                } else { // No fault
-                    faultTbl[col][row] = 0;
-                }
-            }
-        }
-    }
 }
 
 /*
