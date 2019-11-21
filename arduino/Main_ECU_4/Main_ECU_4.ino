@@ -314,6 +314,9 @@ void flagScan(const byte &flag, flagReader funcTbl[8]) {
     }
 }
 
+// Push data to andriod using Teensy UART | Eg. Serial1.write();
+// TODO: add way to push message blocks to andriod with Serial1.write
+// IMPROVE: make andriod decode bytes
 void writeTTMsg(const TTMsg &msg) { // TODO: can't we just get rid of this?
     Can0.write(msg);
 }
