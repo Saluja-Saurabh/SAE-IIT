@@ -2,5 +2,6 @@
     "port": "COM8",
     "board": "arduino:avr:teensy36",
     "sketch": "Main_ECU_4.ino",
-    "configuration": "usb=serial,speed=180,opt=o2std,keys=en-us"
+    "configuration": "usb=serial,speed=180,opt=o2std,keys=en-us",
+    "output": "build"
 }

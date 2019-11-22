@@ -5,9 +5,10 @@
     
 */
 
-#include <IFCT.h>                      // ImprovedFLexCanLibrary using only Can0
-typedef bool (*msgHandle)(TTMsg &msg); // for message specialization such as a message block with only flags
-typedef void (*flagReader)(void);      // functions that are called when flag bits are true
+#include <IFCT.h> // ImprovedFLexCanLibrary using only Can0
+typedef struct TTMsg TTmsg;
+typedef bool (*msgHandle)(TTMsg &); // for message specialization such as a message block with only flags
+typedef void (*flagReader)(void);   // functions that are called when flag bits are true
 
 // TODO: decide on addresses for all the sensors and bms
 enum CanADR : uint32_t {
@@ -32,9 +33,9 @@ enum data {
 
     // Motor data
     // TEMP1
-    PhaseA = true,
-    PhaseB = true,
-    PhaseC = true,
+    PhaseATemp = true,
+    PhaseBTemp = true,
+    PhaseCTemp = true,
     DriverBoard = true,
     // TEMP2
     ControlBoard = true,
@@ -52,13 +53,13 @@ enum data {
     electricalFreq = true,
     deltaResolver = true, // Unused
     //CURRENT
-    PhaseA = true,
-    PhaseB = true,
-    PhaseC = true,
-    DCBus = true,
+    PhaseACur = true,
+    PhaseBCur = true,
+    PhaseCCur = true,
+    DCBusCur = true,
     //VOLTAGE
-    DCBus = true,
-    Output = true,
+    DCBusV = true,
+    OutputV = true,
     VAB_Vd = true,
     VBC_Vq = true,
 
@@ -89,24 +90,24 @@ enum data {
     data        |   | S3|   | S2|   | S1|   | S0| // Where data funcs are called (based off pos in TTMsg table | Byte#/2)
     FLAG pos    | F1| F0|                         // Flag bytes if they exist NOTE: only byte 0 will call functions
 */
-typedef struct TTMsg : CAN_message_t { // Teensy to Teensy message definition/structure
-    uint32_t id;                       // identifies how the msg should be interpreted using it's address
-    data packets[4];                   // data that have data in this message; position in table sets where PKT goes (see ^)
-    byte offset;                       // now any data can have an offset for duplicates | the 2 motors in this case
-    flagReader flagFuncs[8];           // functions that are called when a flag bit is true | limits callbacks to flag byte 0
-    data flagValues[8];                // sensor pins to read and push onto the flag byte | only flag byte 0
-    msgHandle handle;                  // function that can handle the message instead | for specialization of messages
-    bool sideHandle;                   // handle is called alongside the acutal proccessing of msg
-    byte buf[8];                       // values from bytes that will be pushed after reading
-    bool containsFlag;                 // used for memoization
-} TTMsg;                               // IMPROVE: Flags can be extended to handle two bytes if it is really neccessary
+
+struct TTMsg : CAN_message_t { // Teensy to Teensy message definition/structure
+    uint32_t id;               // identifies how the msg should be interpreted using it's address
+    data packets[4];           // data that have data in this message; position in table sets where PKT goes (see ^)
+    byte offset;               // now any data can have an offset for duplicates | the 2 motors in this case
+    flagReader flagFuncs[8];   // functions that are called when a flag bit is true | limits callbacks to flag byte 0
+    data flagValues[8];        // sensor pins to read and push onto the flag byte | only flag byte 0
+    msgHandle handle;          // function that can handle the message instead | for specialization of messages
+    bool sideHandle;           // handle is called alongside the acutal proccessing of msg
+    byte buf[8];               // values from bytes that will be pushed after reading
+    bool containsFlag;         // used for memoization
+};                             // IMPROVE: Flags can be extended to handle two bytes if it is really neccessary
 
 /* ----- ECU specific data ----- */
 
 byte MOTOROFFSET = 0x30;
 
 bool carUnlocked = false;
-
 void initalizeCar() {   // Start button has been pressed
     carUnlocked = true; // Let the car be able to move
     // TODO: include precharge sequence
@@ -126,108 +127,109 @@ bool storeflag(TTMsg &msg) {
 }
 
 // this message would be on teensy 2
-TTMsg info{
-    INFO,
-    {},
-    0,
-    {initalizeCar},
-};
+TTMsg info;
+// TTMsg info = {
+//     INFO,
+//     {},
+//     0,
+//     {initalizeCar},
+// };
 
 // this message would be on teensy 1
-TTMsg info{
-    INFO,
-    {},
-    0,
-    {},
-    {
-        startButtonPin,
-    },
-    storeflag,
-    true,
-};
+// TTMsg info{
+//     INFO,
+//     {},
+//     0,
+//     {},
+//     {
+//         startButtonPin,
+//     },
+//     storeflag,
+//     true,
+// };
 
-TTMsg WriteSpeed{
-    SPEEDWRITE,
-    {},
-    0,
-    {},
-    {},
-    motorWriteSpeed,
-};
+// TTMsg WriteSpeed{
+//     SPEEDWRITE,
+//     {},
+//     0,
+//     {},
+//     {},
+//     motorWriteSpeed,
+// };
 
 // FIXME: issue with struct inheritance and initalization of TTMsg?
-TTMsg motorTemp1{
-    TEMP1,
-    {
-        PhaseA,
-        PhaseB,
-        PhaseC,
-        DriverBoard,
-    },
-    MOTOROFFSET,
-};
+// TTMsg motorTemp1{
+//     TEMP1,
+//     {
+//         PhaseATemp,
+//         PhaseBTemp,
+//         PhaseCTemp,
+//         DriverBoard,
+//     },
+//     MOTOROFFSET,
+// };
 
-TTMsg motorTemp2{
-    TEMP2,
-    {
-        ControlBoard,
-        RTD1,
-        RTD2,
-        RTD3,
-    },
-    MOTOROFFSET,
-};
+// TTMsg motorTemp2{
+//     TEMP2,
+//     {
+//         ControlBoard,
+//         RTD1,
+//         RTD2,
+//         RTD3,
+//     },
+//     MOTOROFFSET,
+// };
 
-TTMsg motorTemp3{
-    TEMP3,
-    {
-        RTD4,
-        RTD5,
-        motor,
-        torqueShudder,
-    },
-    MOTOROFFSET,
-};
+// TTMsg motorTemp3{
+//     TEMP3,
+//     {
+//         RTD4,
+//         RTD5,
+//         motor,
+//         torqueShudder,
+//     },
+//     MOTOROFFSET,
+// };
 
-TTMsg motorPosition{
-    MOTORPOS,
-    {
-        angle,
-        anglrVel,
-        electricalFreq,
-        deltaResolver,
-    },
-    MOTOROFFSET,
-};
+// TTMsg motorPosition{
+//     MOTORPOS,
+//     {
+//         angle,
+//         anglrVel,
+//         electricalFreq,
+//         deltaResolver,
+//     },
+//     MOTOROFFSET,
+// };
 
-TTMsg current{
-    CURRENT,
-    {
-        PhaseA,
-        PhaseB,
-        PhaseC,
-        DCBus,
-    },
-    MOTOROFFSET,
-};
+// TTMsg current{
+//     CURRENT,
+//     {
+//         PhaseACur,
+//         PhaseBCur,
+//         PhaseCCur,
+//         DCBusCur,
+//     },
+//     MOTOROFFSET,
+// };
 
-TTMsg voltage{
-    VOLTAGE,
-    {
-        DCBus,
-        Output,
-        VAB_Vd,
-        VBC_Vq,
-    },
-    MOTOROFFSET,
-};
+// TTMsg voltage{
+//     VOLTAGE,
+//     {
+//         DCBusV,
+//         OutputV,
+//         VAB_Vd,
+//         VBC_Vq,
+//     },
+//     MOTOROFFSET,
+// };
 
 // load all the ECU specific messages
-TTMsg TTMessages[]{
-    info,
+TTMsg *TTMessages[]{
+    &info,
 };
 
-void initalizeMsg(TTMsg &msg) {
+void initalizeMsg(TTMsg msg) {
     if (*(msg.flagFuncs)) { // use bool to see if flags are at byte 0 | is this better? idk
         msg.containsFlag = true;
         if (msg.packets[3]) { // if a flags exist and so do all four data slots then this is a problem
@@ -236,7 +238,7 @@ void initalizeMsg(TTMsg &msg) {
     }
 }
 
-TTMsg offsetMsg(TTMsg &msg) { // duplicates message block as the offset block can have seperate values and flags
+TTMsg offsetMsg(TTMsg msg) { // duplicates message block as the offset block can have seperate values and flags
     TTMsg dup;
     dup.id = msg.id + msg.offset;
     *dup.packets = *msg.packets;
@@ -262,10 +264,14 @@ void startUp() { // how does the teensy check for start button when it should be
 }
 
 void setup() {
-    for (size_t i = 0; i < sizeof(TTMessages); i++) {
-        initalizeMsg(TTMessages[i]);
-        if (TTMessages[i].offset) {
-            initalizeMsg(offsetMsg(TTMessages[i]));
+
+    info.id = INFO;
+    *(info.flagFuncs) = {initalizeCar};
+
+    for (auto msg : TTMessages) {
+        initalizeMsg(*msg);
+        if ((*msg).offset) {
+            initalizeMsg(offsetMsg(*msg));
         }
     }
 
@@ -282,14 +288,14 @@ void loop() {
     if (Can0.read(dataIn)) {
         teensyRead(dataIn);
     }
-    for (TTMsg &msg : TTMessages) { // Iterate through defined TTMsgs and push their data
-        updateData(msg);
-        writeTTMsg(msg);
+    for (TTMsg *msg : TTMessages) { // Iterate through defined TTMsgs and push their data
+        updateData(*msg);
+        writeTTMsg(*msg);
     }
 }
 
 void updateData(TTMsg &msg) {
-    if (msg.handle && !msg.handle(msg)) { // if the handle exists and returns true upon calling continue execution
+    if (msg.handle && !(*msg.handle)(msg)) { // if the handle exists and returns true upon calling continue execution
         return;
     }
     for (int i = 0; i < 8; i += 2) {
@@ -340,9 +346,9 @@ void readTTMsg(TTMsg &msg, const byte buf[8]) {
 
 // Iterate through defined TTMsgs and check if the address is one of theirs
 void teensyRead(const CAN_message_t &dataIn) {
-    for (TTMsg &msg : TTMessages) {
-        if (msg.id == dataIn.id) {
-            readTTMsg(msg, dataIn.buf); // id matches; interpret data based off matching msg structure
+    for (TTMsg *msg : TTMessages) {
+        if ((*msg).id == dataIn.id) {
+            readTTMsg(*msg, dataIn.buf); // id matches; interpret data based off matching msg structure
             break;
         };
     }
