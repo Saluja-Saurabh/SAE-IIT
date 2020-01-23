@@ -2,13 +2,12 @@
     SAE - 2019
     Teensy 3.6 ECU x2
     Version 4
-    
 */
 
 #include <IFCT.h> // ImprovedFLexCanLibrary using only Can0
-typedef struct TTMsg TTmsg;
-typedef bool (*msgHandle)(TTMsg &); // for message specialization such as a message block with only flags
-typedef void (*flagReader)(void);   // functions that are called when flag bits are true
+struct TTMsg;
+typedef bool (*msgHandle)(TTMsg); // for message specialization such as a message block with only flags
+typedef void (*flagReader)(void); // functions that are called when flag bits are true
 
 // TODO: decide on addresses for all the sensors and bms
 enum CanADR : uint32_t {
@@ -73,7 +72,7 @@ enum data {
     pedalPin = 17,
     lightsPin = 18,
     accelerator_1 = 21,
-    accelerator_2 = 21,
+    accelerator_2 = 21, // Should these be the same
 
     // Teensy Two
     TSMP = 14,
@@ -81,6 +80,8 @@ enum data {
     gyro = 16,
     brakeLight = 17,
     pump = 18,
+    PrechargeErrorPin = 99,
+    PrechargeRelayPin = 99,
 };
 
 /*
@@ -91,149 +92,81 @@ enum data {
     FLAG pos    | F1| F0|                         // Flag bytes if they exist NOTE: only byte 0 will call functions
 */
 
-struct TTMsg : CAN_message_t { // Teensy to Teensy message definition/structure
-    uint32_t id;               // identifies how the msg should be interpreted using it's address
-    data packets[4];           // data that have data in this message; position in table sets where PKT goes (see ^)
-    byte offset;               // now any data can have an offset for duplicates | the 2 motors in this case
-    flagReader flagFuncs[8];   // functions that are called when a flag bit is true | limits callbacks to flag byte 0
-    data flagValues[8];        // sensor pins to read and push onto the flag byte | only flag byte 0
-    msgHandle handle;          // function that can handle the message instead | for specialization of messages
-    bool sideHandle;           // handle is called alongside the acutal proccessing of msg
-    byte buf[8];               // values from bytes that will be pushed after reading
-    bool containsFlag;         // used for memoization
-};                             // IMPROVE: Flags can be extended to handle two bytes if it is really neccessary
+// TODO: actually inistalize TTMsg and CAN_message_t values in constructor instead of depending on just the default values!
+struct TTMsg : public CAN_message_t { // Teensy to Teensy message definition/structure
+    // uint32_t id = 0;             // identifies how the msg should be interpreted using it's address
+    data packets[4] = {NIL};       // data that have data in this message; position in table sets where PKT goes (see ^)
+    byte offset = 0;               // now any data can have an offset for duplicates | the 2 motors in this case
+    flagReader flagFuncs[8] = {0}; // functions that are called when a flag bit is true | limits callbacks to flag byte 0
+    data flagValues[8] = {NIL};    // sensor pins to read and push onto the flag byte | only flag byte 0
+    msgHandle handle = 0;          // function that can handle the message instead | for specialization of messages
+    bool sideHandle = 0;           // handle is called alongside the acutal proccessing of msg
+    // byte buf[8] = {0};             // values from bytes that will be pushed after reading
+    bool containsFlag = 0; // used for memoization
+    TTMsg(){};
+    TTMsg(uint32_t i, data p[4], byte o, flagReader fF[8], data fV[8], msgHandle h, bool s, byte b[8], bool c) {
+        id = i;
+        // packets = p;
+        offset = o;
+        // flagFuncs = fF;
+        // flagValues = fV;
+        handle = h;
+        sideHandle = s;
+        // buf = {b};
+        containsFlag = c;
+    }
+    TTMsg(uint32_t i, flagReader fF[8]) {
+        id = i;
+        // flagFuncs = fF;
+    }
+    TTMsg(uint32_t i, msgHandle h) {
+        id = i;
+        handle = h;
+    }
+}; // IMPROVE: Flags can be extended to handle two bytes if it is really neccessary
 
 /* ----- ECU specific data ----- */
 
-byte MOTOROFFSET = 0x30;
+uint32_t MOTOROFFSET = 0xe0;
+uint32_t MOTORSTATICOFFSET = 0x0A0; // IMPROVE: auto set this global offset to addresses
 
 bool carUnlocked = false;
-void initalizeCar() {   // Start button has been pressed
-    carUnlocked = true; // Let the car be able to move
-    // TODO: include precharge sequence
+void initalizeCar() {
+    carUnlocked = true;
+    Serial.println("MOTORS UNLOCKED");
 }
 
-// TODO: are the car flaps a variable or switch output?
-// void flapsUp() {
-//     analogWrite(servo_pwm, 0);
-//     digitalWriteFast(sig_8_2_on_off, HIGH);
-// }
+TTMsg WriteSpeed = TTMsg(SPEEDWRITE, motorPushSpeed);
+TTMsg MCReset = TTMsg(0x0C1 - MOTORSTATICOFFSET, MCResetFunc);
 
-// void flapsDown() {
-// }
-
-bool storeflag(TTMsg &msg) {
+// MC Fault reseter thing
+bool MCResetFunc(TTMsg msg) { // IMPROVE: There may be reliability issues with only sending one?
+    msg.ext = 0;
+    msg.len = 8;
+    msg.buf[0] = 20;
+    msg.buf[1] = 0;
+    msg.buf[2] = 1;
+    msg.buf[3] = 0;
+    msg.buf[4] = 0;
+    msg.buf[5] = 0;
+    msg.buf[6] = 0;
+    msg.buf[7] = 0;
+    writeTTMsg(msg);
     return true;
 }
 
-// this message would be on teensy 2
-TTMsg info;
-// TTMsg info = {
-//     INFO,
-//     {},
-//     0,
-//     {initalizeCar},
-// };
-
-// this message would be on teensy 1
-// TTMsg info{
-//     INFO,
-//     {},
-//     0,
-//     {},
-//     {
-//         startButtonPin,
-//     },
-//     storeflag,
-//     true,
-// };
-
-// TTMsg WriteSpeed{
-//     SPEEDWRITE,
-//     {},
-//     0,
-//     {},
-//     {},
-//     motorWriteSpeed,
-// };
-
-// FIXME: issue with struct inheritance and initalization of TTMsg?
-// TTMsg motorTemp1{
-//     TEMP1,
-//     {
-//         PhaseATemp,
-//         PhaseBTemp,
-//         PhaseCTemp,
-//         DriverBoard,
-//     },
-//     MOTOROFFSET,
-// };
-
-// TTMsg motorTemp2{
-//     TEMP2,
-//     {
-//         ControlBoard,
-//         RTD1,
-//         RTD2,
-//         RTD3,
-//     },
-//     MOTOROFFSET,
-// };
-
-// TTMsg motorTemp3{
-//     TEMP3,
-//     {
-//         RTD4,
-//         RTD5,
-//         motor,
-//         torqueShudder,
-//     },
-//     MOTOROFFSET,
-// };
-
-// TTMsg motorPosition{
-//     MOTORPOS,
-//     {
-//         angle,
-//         anglrVel,
-//         electricalFreq,
-//         deltaResolver,
-//     },
-//     MOTOROFFSET,
-// };
-
-// TTMsg current{
-//     CURRENT,
-//     {
-//         PhaseACur,
-//         PhaseBCur,
-//         PhaseCCur,
-//         DCBusCur,
-//     },
-//     MOTOROFFSET,
-// };
-
-// TTMsg voltage{
-//     VOLTAGE,
-//     {
-//         DCBusV,
-//         OutputV,
-//         VAB_Vd,
-//         VBC_Vq,
-//     },
-//     MOTOROFFSET,
-// };
-
 // load all the ECU specific messages
 TTMsg *TTMessages[]{
-    &info,
+    &WriteSpeed,
+    &MCReset,
 };
 
 void initalizeMsg(TTMsg msg) {
-    if (*(msg.flagFuncs)) { // use bool to see if flags are at byte 0 | is this better? idk
+    if (msg.flagFuncs) { // use bool to see if flags are at byte 0 | is this better? idk
         msg.containsFlag = true;
         if (msg.packets[3]) { // if a flags exist and so do all four data slots then this is a problem
-            Serial.println("WARNING: FLAG AND MESSAGE CONFLICT! ID:" + msg.id);
+            Serial.print("WARNING: FLAG AND MESSAGE CONFLICT! ID:");
+            Serial.println(msg.id, HEX);
         } // TODO: find a way to display errors
     }
 }
@@ -255,18 +188,24 @@ void toggleLED() {
     loopSwitch = !loopSwitch;
 }
 
-void startUp() { // how does the teensy check for start button when it should be off when pressed???
+void LEDBlink() { // how does the teensy check for start button when it should be off when pressed???
+    // Should Blink Twice per call
     toggleLED();
     delay(250);
     toggleLED();
+    delay(125);
+    toggleLED();
     delay(250);
     toggleLED();
+    delay(125);
 }
 
 void setup() {
-
-    info.id = INFO;
-    *(info.flagFuncs) = {initalizeCar};
+    delay(3000);
+    Serial.begin(19200);
+    pinMode(boardLed, OUTPUT);
+    Serial.println("Hello!");
+    LEDBlink();
 
     for (auto msg : TTMessages) {
         initalizeMsg(*msg);
@@ -277,21 +216,19 @@ void setup() {
 
     pinMode(2, OUTPUT); // Fusion Tech's Dual CAN-Bus R pin switch
     digitalWrite(2, LOW);
-    Can0.setBaudRate(1000000); // Speeed
-    Can0.enableFIFO();         // FirstInFirstOut
-    startUp();
+    Can1.setBaudRate(500000); // Speeed
+    Can1.enableFIFO();        // FirstInFirstOut
+    LEDBlink();
+    digitalWriteFast(boardLed, LOW);
 }
 
 void loop() {
-    toggleLED();          // TODO: disable on final build to save a few cycles
-    CAN_message_t dataIn; // Can message obj
-    if (Can0.read(dataIn)) {
-        teensyRead(dataIn);
-    }
     for (TTMsg *msg : TTMessages) { // Iterate through defined TTMsgs and push their data
         updateData(*msg);
-        writeTTMsg(*msg);
+        // writeTTMsg(*msg); // move to updateData
     }
+    // if (!carUnlocked && millis() > 10000) // Simulate car Button press
+    //     initalizeCar();
 }
 
 void updateData(TTMsg &msg) {
@@ -299,8 +236,8 @@ void updateData(TTMsg &msg) {
         return;
     }
     for (int i = 0; i < 8; i += 2) {
-        if (msg.packets[i / 2]) { // If we have a sensor for this packet read and store it
-            int val = analogRead(msg.packets[i / 2]);
+        if (msg.packets[i / 2]) {                     // If we have a sensor for this packet read and store it
+            int val = analogRead(msg.packets[i / 2]); // TODO: Some sensors are digital not just analog!
             msg.buf[i] = val / 255;
             msg.buf[i + 1] = val % 255;
         }
@@ -320,11 +257,26 @@ void flagScan(const byte &flag, flagReader funcTbl[8]) {
     }
 }
 
+void printMsg(TTMsg const &msg) { // Print out can msg buffer
+    Serial.print(msg.id, HEX);
+    Serial.println(" = ");
+    Serial.println(msg.buf[0]);
+    Serial.println(msg.buf[1]);
+    Serial.println(msg.buf[2]);
+    Serial.println(msg.buf[3]);
+    Serial.println(msg.buf[4]);
+    Serial.println(msg.buf[5]);
+    Serial.println(msg.buf[6]);
+    Serial.println(msg.buf[7]);
+}
+
 // Push data to andriod using Teensy UART | Eg. Serial1.write();
 // TODO: add way to push message blocks to andriod with Serial1.write
 // IMPROVE: make andriod decode bytes
 void writeTTMsg(const TTMsg &msg) { // TODO: can't we just get rid of this?
-    Can0.write(msg);
+    // printMsg(msg);
+    // Serial.println(millis());
+    Can1.write(msg);
 }
 
 //IMPROVE: instead of just storing values and pushing later, why not push as they are recieved? Consult leads!
@@ -357,7 +309,8 @@ void teensyRead(const CAN_message_t &dataIn) {
 // motor functions
 
 // TODO: test what the accelerators are outputting
-bool motorWriteSpeed(TTMsg &msg) {
+bool motorPushSpeed(TTMsg msg) {
+
     int avgSpeed = 0;
     int accelerator0 = analogRead(accelerator_1);
     int accelerator1 = analogRead(accelerator_2);
@@ -365,33 +318,44 @@ bool motorWriteSpeed(TTMsg &msg) {
         accelerator0 = 0;
         accelerator1 = 0;
     }
+
     float errorcheck = abs(accelerator0 - accelerator1) / accelerator1; // Percent error
     if (errorcheck <= 0.1) {                                            // if the error is less than 10%
         avgSpeed = (accelerator0 + accelerator1) / 2;
     } else {
-        Serial.println("Error accelerator reading");
+        Serial.println("Error accelerator reading"); // ERROR?
     }
+    // "the value of the tquore needs to be a power of 10 of the actual tourqe;" by dominck
+    // TODO: torque vector function thing? probably goes here
+    // also uses var: avgSpeed for the accelerator val
+    int speed0 = analogRead(23); // speed of motor 0
+    int speed1 = analogRead(23); // speed of motor 1
+    // Serial.println(speed0);
+    motorWriteSpeed(msg, 0, 0, speed0);
+    motorWriteSpeed(msg, MOTOROFFSET, 1, speed1);
 
-    if (avgSpeed > 860)
-        avgSpeed = 860;
-    int percent_speed = constrain(map(avgSpeed, 0, 860, 0, 100), 0, 100);
+    return false; // Don't continue normal TTMsg proccessing
+}
 
+void motorWriteSpeed(TTMsg msg, byte offset, bool direction, int speed) { // speed is value 0 - 860
+    int percent_speed = constrain(map(speed, 0, 1024, 0, 400), 0, 400); // seprate func for negative vals (regen)
+    // Serial.println(percent_speed);
     //Calculations value = (high_byte x 256) + low_byte
     byte low_byte = percent_speed % 256;
     byte high_byte = percent_speed / 256;
-
+    msg.id = SPEEDWRITE + offset - MOTORSTATICOFFSET;
+    // Serial.println(msg.id);
+    msg.ext = 0;
+    msg.len = 8;
     msg.buf[0] = low_byte; // NM
     msg.buf[1] = high_byte;
-    msg.buf[4] = 1;           // Direction // TODO: how do we get this?
+    msg.buf[2] = 0; // Speed
+    msg.buf[3] = 0;
+    msg.buf[4] = direction;   // Direction
     msg.buf[5] = carUnlocked; // Inverter enable byte
-
-    // TODO: torque vector function thing? probably goes here
-    msg.id += MOTOROFFSET; // offset id in handle function to avoid recalculation of speed
+    msg.buf[6] = 0;           // Last two are the maximum torque values || if 0 then defualt values are set
+    msg.buf[7] = 0;
     writeTTMsg(msg);
-    msg.id -= MOTOROFFSET;
-    writeTTMsg(msg);
-
-    return false; // Don't continue normal TTMsg operation
 }
 
 /*
