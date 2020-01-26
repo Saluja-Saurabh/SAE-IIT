@@ -279,7 +279,12 @@ void setup() {
     digitalWriteFast(boardLed, LOW);
 }
 
+CAN_message_t dataIn; // Can data in obj
+
 void loop() {
+    if (Can0.read(dataIn)) {
+        teensyRead(dataIn);
+    }
 
     for (TTMsg msg : TTMessages) { // Iterate through defined TTMsgs and push their data
         updateData(msg);
