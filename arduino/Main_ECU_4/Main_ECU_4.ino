@@ -9,6 +9,9 @@ struct TTMsg;
 typedef bool (*msgHandle)(TTMsg); // for message specialization such as a message block with only flags
 typedef void (*flagReader)(void); // functions that are called when flag bits are true
 
+// bms voltage global, voltage grabbed in function: read_bms_volt_fun
+float BMS_VOLTAGE = 0;
+
 // TODO: decide on addresses for all the sensors and bms
 enum CanADR : uint32_t {
     // motor
@@ -24,6 +27,8 @@ enum CanADR : uint32_t {
     FAULT = 0x0AB,
     // IDK
     INFO = 0x1A5,
+    // BMS
+    BMS_VOLTAGE_ID = 0x00,
 };
 
 // Used to identify what data goes into what message
@@ -80,8 +85,9 @@ enum data {
     gyro = 16,
     brakeLight = 17,
     pump = 18,
-    PrechargeErrorPin = 99,
+    PrechargeairPin = 99,
     PrechargeRelayPin = 99,
+    dischargeactive_pin = 99,
 };
 
 /*
@@ -136,9 +142,6 @@ void initalizeCar() {
     Serial.println("MOTORS UNLOCKED");
 }
 
-TTMsg WriteSpeed = TTMsg(SPEEDWRITE, motorPushSpeed);
-TTMsg MCReset = TTMsg(0x0C1 - MOTORSTATICOFFSET, MCResetFunc);
-
 // MC Fault reseter thing
 bool MCResetFunc(TTMsg msg) { // IMPROVE: There may be reliability issues with only sending one?
     msg.ext = 0;
@@ -155,10 +158,64 @@ bool MCResetFunc(TTMsg msg) { // IMPROVE: There may be reliability issues with o
     return true;
 }
 
-// load all the ECU specific messages
-TTMsg *TTMessages[]{
-    &WriteSpeed,
-    &MCReset,
+//global for precharge, latching variable
+byte DOPRECHARGE = 1;
+
+bool prechargeFunc(TTMsg msg)
+{
+  if (digitalRead(dischargeactive_pin)) // if airs have no power, then precharge must be checked 
+  {
+    DOPRECHARGE = 1;
+  }
+  int current_id = msg.id;  //save before it gets overwritten
+  if (Can1.read(msg))
+  {
+      if (msg.id == current_id)
+      {
+        float MC_voltage = abs(decodeliledian(msg.buf[0],msg.buf[1])) / 10; //Returns in power of 10s
+        if (!digitalRead(dischargeactive_pin) and DOPRECHARGE) //if airs have no power but had before, then begin precharge circuit
+        {
+          digitalWrite(PrechargeairPin, LOW);  //Keep air open
+          digitalWrite(PrechargeRelayPin, HIGH);  //precharge is closed
+          if (BMS_VOLTAGE >= 150 and (BMS_VOLTAGE * 0.9) <= MC_voltage) // BMS voltage is a global 
+          {
+            DOPRECHARGE = 0;
+          }
+        }
+        else// Can use any MCs voltage, will be the same, must be greater than 270V (0.9 * 300V)
+        {
+          // Should return to normal state
+          digitalWrite(PrechargeairPin, HIGH);  //close air
+          digitalWrite(PrechargeRelayPin, LOW);  //precharge is off
+        }
+      }
+  }
+}
+
+bool read_bms_volt_fun(TTMsg msg)
+{
+  int current_id = msg.id;  //save before it gets overwritten
+  if (Can1.read(msg))
+  {
+      if (msg.id == current_id)
+      {
+        BMS_VOLTAGE = abs(decodeliledian(msg.buf[0],msg.buf[1])) / 10; // First two bytes must be read
+      }
+  }
+}
+
+TTMsg WriteSpeed = TTMsg(SPEEDWRITE, motorPushSpeed);
+TTMsg MCReset = TTMsg(0x0C1 - MOTORSTATICOFFSET, MCResetFunc);
+TTMsg precharge = TTMsg(VOLTAGE - MOTORSTATICOFFSET, prechargeFunc);
+TTMsg bms_volt = TTMsg(BMS_VOLTAGE_ID,read_bms_volt_fun);
+
+// load all the ECU specific messages into the TTMessages array
+TTMsg TTMessages[]
+{
+    WriteSpeed,
+    MCReset,
+    precharge,
+    bms_volt
 };
 
 void initalizeMsg(TTMsg msg) {
@@ -208,9 +265,9 @@ void setup() {
     LEDBlink();
 
     for (auto msg : TTMessages) {
-        initalizeMsg(*msg);
-        if ((*msg).offset) {
-            initalizeMsg(offsetMsg(*msg));
+        initalizeMsg(msg);
+        if ((msg).offset) {
+            initalizeMsg(offsetMsg(msg));
         }
     }
 
@@ -223,16 +280,17 @@ void setup() {
 }
 
 void loop() {
-    for (TTMsg *msg : TTMessages) { // Iterate through defined TTMsgs and push their data
-        updateData(*msg);
+
+    for (TTMsg msg : TTMessages) { // Iterate through defined TTMsgs and push their data
+        updateData(msg);
         // writeTTMsg(*msg); // move to updateData
     }
     // if (!carUnlocked && millis() > 10000) // Simulate car Button press
     //     initalizeCar();
 }
 
-void updateData(TTMsg &msg) {
-    if (msg.handle && !(*msg.handle)(msg)) { // if the handle exists and returns true upon calling continue execution
+void updateData(TTMsg msg) {
+    if (msg.handle && !(msg.handle)(msg)) { // if the handle exists and returns true upon calling continue execution
         return;
     }
     for (int i = 0; i < 8; i += 2) {
@@ -244,8 +302,18 @@ void updateData(TTMsg &msg) {
     }
 }
 
-int decodeByte(const byte low, const byte high) { // probably will only be used to push to andriod
-    return high * 255 + low;                      // Does c++ cast the return type? seems to work?
+int decodeliledian(const byte low, const byte high) { // probably will only be used to push to andriod
+    long value = 0;
+    long full_data = high * 255 + low;
+    if(high < 128) // positive
+      {
+        value = full_data;
+      }
+      else if(high > 128) //neg
+      {
+        value = map(full_data,65280,32640,0,-32640);
+      }
+    return value;                      // Does c++ cast the return type? seems to work?
 }
 
 void flagScan(const byte &flag, flagReader funcTbl[8]) {
@@ -273,14 +341,14 @@ void printMsg(TTMsg const &msg) { // Print out can msg buffer
 // Push data to andriod using Teensy UART | Eg. Serial1.write();
 // TODO: add way to push message blocks to andriod with Serial1.write
 // IMPROVE: make andriod decode bytes
-void writeTTMsg(const TTMsg &msg) { // TODO: can't we just get rid of this?
+void writeTTMsg(const TTMsg msg) { // TODO: can't we just get rid of this?
     // printMsg(msg);
     // Serial.println(millis());
     Can1.write(msg);
 }
 
 //IMPROVE: instead of just storing values and pushing later, why not push as they are recieved? Consult leads!
-void readTTMsg(TTMsg &msg, const byte buf[8]) {
+void readTTMsg(TTMsg msg, const byte buf[8]) {
     size_t i = 0;
     if (msg.containsFlag) {              // Readflags if they are expected
         flagScan(buf[i], msg.flagFuncs); // Only checking byte 0
@@ -298,9 +366,9 @@ void readTTMsg(TTMsg &msg, const byte buf[8]) {
 
 // Iterate through defined TTMsgs and check if the address is one of theirs
 void teensyRead(const CAN_message_t &dataIn) {
-    for (TTMsg *msg : TTMessages) {
-        if ((*msg).id == dataIn.id) {
-            readTTMsg(*msg, dataIn.buf); // id matches; interpret data based off matching msg structure
+    for (TTMsg msg : TTMessages) {
+        if ((msg).id == dataIn.id) {
+            readTTMsg(msg, dataIn.buf); // id matches; interpret data based off matching msg structure
             break;
         };
     }
