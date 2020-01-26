@@ -282,7 +282,7 @@ void setup() {
 CAN_message_t dataIn; // Can data in obj
 
 void loop() {
-    if (Can0.read(dataIn)) {
+    if (Can1.read(dataIn)) {
         teensyRead(dataIn);
     }
 
