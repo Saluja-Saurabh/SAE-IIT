@@ -89,17 +89,13 @@ enum validData {
         // Send
             // button
                 lightsIMDPin = 18,
-            // range
-                pump = 18, // don't worry ;)
-        // Receive
-            // buttons
+        // special
+                // IMD = 15, // ????????????????????????
+                PrechargeairPin = 99,
                 brakeLight = 17,
                 PrechargeRelayPin = 99,
                 dischargeactive_pin = 99,
-            // range
-                // IMD = 15, // ????????????????????????
-                PrechargeairPin = 99,
-                gyro = 16,
+                pump = 18, // don't worry ;)
 };
 
 /*
