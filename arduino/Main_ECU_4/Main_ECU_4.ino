@@ -78,7 +78,7 @@ enum validData {
     pedalPin = 17,
     lightsPin = 18,
     accelerator_1 = 21,
-    accelerator_2 = 21, // Should these be the same
+    accelerator_2 = 21, // for double checking
 
     // Teensy Two
     TSMP = 14,
@@ -107,7 +107,7 @@ struct TTMsg : public CAN_message_t { // Teensy to Teensy message definition/str
     validData *flagValues;            // sensor pins to read and push onto the flag byte | only flag byte 0 // points to table of 8
     msgHandle handle = 0;             // function that can handle the message instead | for specialization of messages
     bool containsFlag = 0;            // used for memoization
-    int data[4] = {0};                // store decoded or raw data for later use
+    int data[4] = {0};                // store decoded or pin data for later use
     TTMsg(validData p[4] = {0}, flagReader fF[8] = {0}, validData fV[8] = {0}) {
         packets = p;
         flagFuncs = fF;
@@ -140,7 +140,6 @@ uint32 MOTOR_OFFSET = 0xe0;         // offset for motor ids
 uint32 MOTOR_STATIC_OFFSET = 0x0A0; // IMPROVE: auto set this global offset to addresses
 bool DO_PRECHARGE = true;           // Precharge latching variable
 bool CAR_UNLOCKED = false;          // MC enable bit state
-// float BMS_VOLTAGE = 0;              // bms voltage global, voltage grabbed in function: bmsVoltFunc
 
 // Handles
 void initalizeCar() {
