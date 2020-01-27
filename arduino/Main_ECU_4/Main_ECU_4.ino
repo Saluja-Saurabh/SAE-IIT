@@ -80,20 +80,26 @@ enum validData {
                 brakepressurePin = 16,
                 accelerator_1 = 21,
                 accelerator_2 = 21, // for double checking
-        // Received
-            //buttons
+        // Receive
+            // buttons
                 lightsIMDPin = 18,
                 lightsBMSPin = 18,
 
     // Teensy Two       0x406-0x40A
-    TSMP = 14,
-    // IMD = 15, // ????????????????????????
-    gyro = 16,
-    brakeLight = 17,
-    pump = 18,
-    PrechargeairPin = 99,
-    PrechargeRelayPin = 99,
-    dischargeactive_pin = 99,
+        // Send
+            // button
+                lightsIMDPin = 18,
+            // range
+                pump = 18, // don't worry ;)
+        // Receive
+            // buttons
+                brakeLight = 17,
+                PrechargeRelayPin = 99,
+                dischargeactive_pin = 99,
+            // range
+                // IMD = 15, // ????????????????????????
+                PrechargeairPin = 99,
+                gyro = 16,
 };
 
 /*
@@ -366,7 +372,7 @@ void teensyRead(const CAN_message_t &dataIn) {
 bool motorPushSpeed(TTMsg msg) {
 
     int avgSpeed = 0;
-    int accelerator0 = analogRead(accelerator_1);
+    int accelerator0 = analogRead(accelerator_1); // should be in the ecudata pointer
     int accelerator1 = analogRead(accelerator_2);
     if (accelerator0 < 5 || accelerator1 < 5) { // To check and clean if the value is jumping around
         accelerator0 = 0;
