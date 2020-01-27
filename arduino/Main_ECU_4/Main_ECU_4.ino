@@ -71,16 +71,21 @@ enum validData {
     // Both Teensy's
     boardLed = 13,
 
-    // Teensy One
-    startButtonPin = 14,
-    steeringPin = 15,
-    brakePin = 16,
-    pedalPin = 17,
-    lightsPin = 18,
-    accelerator_1 = 21,
-    accelerator_2 = 21, // for double checking
+    // Teensy One    0x400-0x405
+        // Send
+            // button
+                startButtonPin = 14,
+            // range
+                steeringPin = 15,
+                brakepressurePin = 16,
+                accelerator_1 = 21,
+                accelerator_2 = 21, // for double checking
+        // Received
+            //buttons
+                lightsIMDPin = 18,
+                lightsBMSPin = 18,
 
-    // Teensy Two
+    // Teensy Two       0x406-0x40A
     TSMP = 14,
     // IMD = 15, // ????????????????????????
     gyro = 16,
@@ -292,8 +297,8 @@ void updateData(TTMsg msg) {
         if (msg.packets[i / 2]) {                     // If we have a sensor for this packet read and store it
             int val = analogRead(msg.packets[i / 2]); // TODO: Some sensors are digital not just analog!
             msg.data[i / 2] = val;                    // store the raw value
-            msg.buf[i] = val / 255;
-            msg.buf[i + 1] = val % 255;
+            msg.buf[i] = val % 256;
+            msg.buf[i + 1] = val / 256;
         }
     }
     writeTTMsg(msg);
@@ -327,7 +332,6 @@ void writeTTMsg(const TTMsg msg) { // TODO: can't we just get rid of this?
     Can1.write(msg);
 }
 
-//IMPROVE: instead of just storing values and pushing later, why not push as they are recieved? Consult leads!
 void readTTMsg(TTMsg msg, const byte buf[8]) {
     size_t i = 0;
     if (msg.containsFlag) {              // Readflags if they are expected
