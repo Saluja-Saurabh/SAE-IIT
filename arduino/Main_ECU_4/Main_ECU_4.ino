@@ -72,30 +72,30 @@ enum validData {
     boardLed = 13,
 
     // Teensy One    0x400-0x405
-        // Send
-            // button
-                startButtonPin = 14,
-            // range
-                steeringPin = 15,
-                brakepressurePin = 16,
-                accelerator_1 = 21,
-                accelerator_2 = 21, // for double checking
-        // Receive
-            // buttons
-                lightsIMDPin = 18,
-                lightsBMSPin = 18,
+    // Send
+    // button
+    startButtonPin = 14,
+    // range
+    steeringPin = 15,
+    brakepressurePin = 16,
+    accelerator_1 = 21,
+    accelerator_2 = 21, // for double checking
+                        // Receive
+                        // buttons
+    lightsIMDPin = 18,
+    lightsBMSPin = 18,
 
     // Teensy Two       0x406-0x40A
-        // Send
-            // button
-                lightsIMDPin = 18,
-        // special
-                // IMD = 15, // ????????????????????????
-                PrechargeairPin = 99,
-                brakeLight = 17,
-                PrechargeRelayPin = 99,
-                dischargeactive_pin = 99,
-                pump = 18, // don't worry ;)
+    // Send
+    // button
+    lightsIMDPin = 18,
+    // special
+    // IMD = 15, // ????????????????????????
+    PrechargeairPin = 99,
+    brakeLight = 17,
+    PrechargeRelayPin = 99,
+    dischargeactive_pin = 99,
+    pump = 18, // don't worry ;;;;;)))))
 };
 
 /*
@@ -106,7 +106,7 @@ enum validData {
     FLAG pos    | F1| F0|                         // Flag bytes if they exist NOTE: only byte 0 will call functions
 */
 
-// TODO: actually inistalize TTMsg and CAN_message_t values in constructor instead of depending on just the default values!
+// TODO: actually initalize TTMsg and CAN_message_t values in constructor instead of depending on just the default values!
 struct TTMsg : public CAN_message_t { // Teensy to Teensy message definition/structure
     validData *packets;               // data that have data in this message; position in table sets where PKT goes (see ^) // points to table of 4
     byte offset = 0;                  // now any data can have an offset for duplicates
@@ -295,7 +295,12 @@ void updateData(TTMsg msg) {
     if (msg.handle && !(msg.handle)(msg)) { // if the handle exists and returns true upon calling continue execution
         return;
     }
-    for (int i = 0; i < 8; i += 2) {
+    size_t i = 0;
+    if (msg.containsFlag) {                  // Readflags if they are expected
+        flagScan(msg.buf[i], msg.flagFuncs); // Only checking byte 0
+        i = 2;                               // Skip flag bytes
+    }
+    for (i = 0; i < 8; i += 2) {
         if (msg.packets[i / 2]) {                     // If we have a sensor for this packet read and store it
             int val = analogRead(msg.packets[i / 2]); // TODO: Some sensors are digital not just analog!
             msg.data[i / 2] = val;                    // store the raw value
@@ -318,11 +323,24 @@ int decodeLilEdian(const byte low, const byte high) {
     }
 }
 
-void flagScan(const byte &flag, flagReader funcTbl[8]) { // Only used by read messages
-    if (flag) {                                          // check if flag has any true bits
-        for (byte bit = 0; bit < 8; ++bit) {             // iterate though flag bits
-            if (funcTbl[bit] && (flag >> bit) & 1)       // check that we can do something if the bit is true
-                funcTbl[bit]();                          // call function based off bit pos
+void flagRead(const TTMsg msg) {                 // read pins that map to flag variables
+    if (msg.containsFlag) {                      // double check it actually has the flags
+        byte flagByte;                           // initalize flagbyte
+        for (byte i = 0; i < 2; i++) {           // capped to first two bytes
+            flagByte = msg.buf[i];               // call byte
+            for (byte bit = 0; bit < 8; ++bit) { // iterate through byte bits
+                if (funcTbl[bit] && (flagByte >> bit) & 1) // 
+                    funcTbl[bit]();
+            }
+        }
+    }
+}
+
+void flagScan(const byte &flagByte, flagReader funcTbl[8]) { // Only used by read messages
+    if (flagByte) {                                          // check if flag has any true bits
+        for (byte bit = 0; bit < 8; ++bit) {                 // iterate though flag bits
+            if (funcTbl[bit] && (flagByte >> bit) & 1)       // check that we can do something if the bit is true
+                funcTbl[bit]();                              // call function based off bit pos
         }
     }
 }
@@ -331,6 +349,7 @@ void flagScan(const byte &flag, flagReader funcTbl[8]) { // Only used by read me
 // TODO: add way to push message blocks to andriod with Serial1.write
 // IMPROVE: make andriod decode bytes
 void writeTTMsg(const TTMsg msg) { // TODO: can't we just get rid of this?
+    // Write2Andriod(msg);
     Can1.write(msg);
 }
 
@@ -344,8 +363,8 @@ void readTTMsg(TTMsg msg, const byte buf[8]) {
     }
     for (i = i; i < 8; i += 2) {
         if (msg.packets[i]) {                                     // are we expecting data on this packet?
-            msg.data[i / 2] = decodeLilEdian(buf[i], buf[i + 1]); //decode and store
-            //do we need to store the sepreate bytes? we are now storing the decoded data
+            msg.data[i / 2] = decodeLilEdian(buf[i], buf[i + 1]); // decode and store
+            // do we need to store the sepreate bytes? we are now storing the decoded data
             // msg.buf[i] = buf[i];                                  // store lowByte
             // msg.buf[i + 1] = buf[i + 1];                          // store highByte
         }
@@ -360,6 +379,9 @@ void teensyRead(const CAN_message_t &dataIn) {
             break;
         };
     }
+
+    
+
 }
 
 // motor functions
