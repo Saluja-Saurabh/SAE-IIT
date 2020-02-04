@@ -8,7 +8,7 @@
 struct TTMsg;
 typedef uint32_t uint32;          // clean it up a lil
 typedef bool (*msgHandle)(TTMsg); // for message specialization such as a message block with only flags
-typedef void (*flagReader)(void); // functions that are called when flag bits are true
+typedef void (*flagReader)(bool); // functions that are called when flag bits are true
 
 // TODO: decide on addresses for all the sensors and bms
 enum CanADR : uint32 {
@@ -27,11 +27,16 @@ enum CanADR : uint32 {
     // IDK
     INFO_ADD = 0x1A5,
     // BMS
-    BMS_VOLT_ADD = 0x00,
+    BMS_STATS_ADD = 0x250,
+    MOTORL_ADD = 0xE0,
+    MOTORR_ADD = 0x00,
+    // TEENSY2TEENSY
+    T2T_ADD = 0xFFF,
+    T2T2_ADD = 0xFFF,
 };
 
 // Used to identify what data goes into what message
-enum validData {
+enum validData : byte {
     NIL = 0, // Pin0 must be sacrificed to the gods to have a nil value
 
     // Motor data
@@ -67,14 +72,22 @@ enum validData {
     VBC_Vq = true,
     //BMS
     BMSVolt = true,
+    BMSTemp = true,
+    BMSSOC = true,
+
+    // accelerator
+    avgAccel = true, // Manually set
 
     // Both Teensy's
     boardLed = 13,
+    lightsIMDPin = 18,
 
     // Teensy One    0x400-0x405
     // Send
     // button
     startButtonPin = 14,
+    IMDReadLight = 99,
+    AMSReadLight = 99,
     // range
     steeringPin = 15,
     brakepressurePin = 16,
@@ -82,20 +95,21 @@ enum validData {
     accelerator_2 = 21, // for double checking
                         // Receive
                         // buttons
-    lightsIMDPin = 18,
     lightsBMSPin = 18,
 
     // Teensy Two       0x406-0x40A
     // Send
     // button
-    lightsIMDPin = 18,
     // special
     // IMD = 15, // ????????????????????????
+    IMDLight = 99,
+    AMSLight = 99,
     PrechargeairPin = 99,
     brakeLight = 17,
     PrechargeRelayPin = 99,
     dischargeactive_pin = 99,
     pump = 18, // don't worry ;;;;;)))))
+
 };
 
 /*
@@ -104,39 +118,40 @@ enum validData {
     PKT pos     |  PKT  |  PKT  |  PKT  |  PKT  | // Valid PKT placement NOTE: is set as seprate H & L in actual buffer
     data        |   | S3|   | S2|   | S1|   | S0| // Where data funcs are called (based off pos in TTMsg table | Byte#/2)
     FLAG pos    | F1| F0|                         // Flag bytes if they exist NOTE: only byte 0 will call functions
+    FLAG bits   |--F1--|0|1|3|4|5|6|7|--F0--|0|1|2|3|4|5|6|7| // how the flags are stored
 */
 
 // TODO: actually initalize TTMsg and CAN_message_t values in constructor instead of depending on just the default values!
-struct TTMsg : public CAN_message_t { // Teensy to Teensy message definition/structure
-    validData *packets;               // data that have data in this message; position in table sets where PKT goes (see ^) // points to table of 4
-    byte offset = 0;                  // now any data can have an offset for duplicates
-    flagReader *flagFuncs;            // functions that are called when a flag bit is true | limits callbacks to flag byte 0 // points to table of 8
-    validData *flagValues;            // sensor pins to read and push onto the flag byte | only flag byte 0 // points to table of 8
-    msgHandle handle = 0;             // function that can handle the message instead | for specialization of messages
-    bool containsFlag = 0;            // used for memoization
-    int data[4] = {0};                // store decoded or pin data for later use
-    TTMsg(validData p[4] = {0}, flagReader fF[8] = {0}, validData fV[8] = {0}) {
+struct TTMsg : public CAN_message_t {                                                          // Teensy to Teensy message definition/structure
+    validData *packets;                                                                        // data that have data in this message; position in table sets where PKT goes (see ^) // points to table of 4
+    uint32 offset = 0;                                                                         // now any data can have an offset for duplicates
+    flagReader *flagFuncs;                                                                     // functions that are called when a flag bit is true | limits callbacks to flag byte 0 // points to table of 8
+    validData *flagValues;                                                                     // sensor pins to read and push onto the flag byte | only flag byte 0 // points to table of 8
+    msgHandle handle = 0;                                                                      // function that can handle the message instead | for specialization of messages
+    bool containsFlag = 0;                                                                     // used for memoization
+    int data[4] = {0};                                                                         // store decoded or pin data for later use
+    void Base(uint32 i, validData p[4] = {0}, flagReader fF[8] = {0}, validData fV[8] = {0}) { // TODO: test if it actually initalizes correctly
+        id = i;
         packets = p;
         flagFuncs = fF;
         flagValues = fV;
-    };
-    TTMsg(uint32 i, validData p[4], byte o, flagReader fF[8], validData fV[8], msgHandle h, byte b[8], bool c) {
-        TTMsg(p, fF, fV);
-        id = i;
-        offset = o;
-        handle = h;
-        containsFlag = c;
     }
+    TTMsg(uint32 i) { // blank msg
+        Base(i);
+    };
     TTMsg(uint32 i, msgHandle h) { // purely handled by separate functions
-        TTMsg();
-        id = i;
+        Base(i);
         handle = h;
     }
     TTMsg(uint32 i, const validData (&p)[4]) { // only stores data
-        TTMsg(p);
-        id = i;
+        Base(i, (validData *)(&p));
     }
-}; // IMPROVE: Flags can be extended to handle two bytes if it is really neccessary
+    TTMsg(uint32 i, const validData (&p)[4], const flagReader (&fF)[8], const validData (&fV)[8]) { // data storage for packets and reactive flags
+        Base(i, (validData *)(&p), (flagReader *)(&fF), (validData *)(&fV));
+    }
+}
+
+; // IMPROVE: Flags can be extended to handle two bytes if it is really neccessary
 
 /* 
     ----- SRT ECU specific data -----  
@@ -146,14 +161,41 @@ struct TTMsg : public CAN_message_t { // Teensy to Teensy message definition/str
 uint32 MOTOR_OFFSET = 0xe0;         // offset for motor ids
 uint32 MOTOR_STATIC_OFFSET = 0x0A0; // IMPROVE: auto set this global offset to addresses
 bool DO_PRECHARGE = true;           // Precharge latching variable
-bool CAR_UNLOCKED = false;          // MC enable bit state
+bool START_BUTTON_PUSHED = false;   // MC enable bit state
+bool PEDAL_ERROR = false;
+bool CAR_MODE = false; // true: RaceMode false: EcoMode
+const byte Teensy2SerialArrSize = 12;
+int Teensy2SerialArr[Teensy2SerialArrSize];
+int Send2SerialADD = {
 
-// Handles
-void initalizeCar() {
-    CAR_UNLOCKED = true;
+};
+
+// Flag Handles
+void initalizeCar(bool bit) {
+    START_BUTTON_PUSHED = true;
     Serial.println("MOTORS UNLOCKED");
 }
 
+void setPedalState(bool bit) {
+    PEDAL_ERROR = bit;
+}
+
+void IMDSetLight(bool bit) {
+    digitalWriteFast(IMDLight, bit);
+}
+
+void AMDSetLight(bool bit) {
+    digitalWriteFast(AMSLight, bit);
+}
+
+void setCarMode(bool bit) {
+    // TODO: ensure car is not moving
+    if (*ECUData.MCMotorAng < 5) { // rpm = motor controller rpm
+        CAR_MODE = bit;
+    }
+}
+
+// Handles
 bool MCResetFunc(TTMsg msg) { // MC Fault reseter thing
     msg.ext = 0;
     msg.len = 8;
@@ -189,19 +231,39 @@ bool prechargeFunc(TTMsg msg) {
 }
 
 // Initalize messages
+// TODO: do both MOTOR CONTROLLERS!
 TTMsg WriteSpeed = TTMsg(SPEEDWRITE_ADD, motorPushSpeed);
 TTMsg MCReset = TTMsg(RESETMC_ADD - MOTOR_STATIC_OFFSET, MCResetFunc);
+TTMsg MCTempRead = TTMsg(RESETMC_ADD - MOTOR_STATIC_OFFSET, MCResetFunc);
+TTMsg MCMotorPos = TTMsg(MOTORPOS_ADD - MOTOR_STATIC_OFFSET, {angle});
 TTMsg precharge = TTMsg(VOLTAGE_ADD - MOTOR_STATIC_OFFSET, prechargeFunc);
-TTMsg bmsVolt = TTMsg(BMS_VOLT_ADD, {BMSVolt}); //TODO: does this address only have the bms voltage?
+TTMsg bmsStat = TTMsg(BMS_STATS_ADD, {BMSTemp, BMSVolt, BMSSOC});
+TTMsg motorL = TTMsg(MOTORL_ADD, {MOTORLTEMP});
+TTMsg motorR = TTMsg(MOTORR_ADD, {MOTORRTEMP});
+TTMsg T2TData = TTMsg(T2T_ADD, {avgAccel, breakPress, steeringAng}, {NULL, NULL, NULL, initalizeCar, NULL}, {IMDReadLight, AMSReadLight, CarMode, StartButton, pedalAir});
+TTMsg T2T2Data = TTMsg(T2T2_ADD, {rpmLWheel, rpmRWheel});
 
+// anything that says MC, motor controller, needs to be doubled
 struct ECUData {                       // pointers to data that will be used within teensy itself | ex. BMS_VOLTAGE
-    int *BMSVolt_p = &bmsVolt.data[0]; // we must keep track of what is being stored where in the packet setup
-} ECUData;                             // IMPROVE: make more readable way to store data
+    int *BMSVolt_p = &bmsStat.data[1]; // we must keep track of what is being stored where in the packet setup
+    int *BMSTEMP_p = &bmsStat.data[0];
+    int *LMTEMP_P = &motorL.data[0];
+    int *RMTEMP_P = &motorR.data[0];
+    int *MCMotorAng = &MCMotorPos.data[0];
+    int *MCTEMP_P = &MCTempRead.data[0];
+    int *BMSSOC_P = &bmsStat.data[2];        // state of charge
+    int *BMSBUSCURRENT_P = &bmsStat.data[2]; // bus current
+    int *T2TACCEL_P = &T2TData.data[0];      // avgAccel
+} ECUData;                                   // IMPROVE: make more readable way to store data
+
+// TODO: faults! IMD is digital and BMS is seperate address
+// TODO: calculate average speed
+// TODO: Active aero
 
 // load messages as read or write
 TTMsg ReadTTMessages[]{
     precharge,
-    bmsVolt,
+    bmsStat,
 };
 
 TTMsg WriteTTMessages[]{
@@ -221,11 +283,7 @@ void initalizeMsg(TTMsg msg) {
 }
 
 TTMsg offsetMsg(TTMsg msg) { // duplicates message blocks; allows the offset block to have seperate read/write data
-    TTMsg dup;
-    dup.id = msg.id + msg.offset;
-    *dup.packets = *msg.packets;
-    *dup.flagFuncs = *msg.flagFuncs;
-    dup.handle = msg.handle;
+    TTMsg dup = TTMsg(msg.id + msg.offset, msg.packets, msg.flagFuncs, msg.flagValues, msg.handle);
     return dup;
 }
 
@@ -251,6 +309,8 @@ void LEDBlink() { // how does the teensy check for start button when it should b
     toggleLED();
     delay(125);
 }
+// are fault messages all just flags?
+// TODO: when a fault is detected read serial
 
 void setup() {
     delay(3000);
@@ -261,13 +321,14 @@ void setup() {
 
     for (auto msg : WriteTTMessages) {
         initalizeMsg(msg);
-        if ((msg).offset) {
+        if (msg.offset) {
             initalizeMsg(offsetMsg(msg));
         }
     }
+
     for (auto msg : ReadTTMessages) {
         initalizeMsg(msg);
-        if ((msg).offset) {
+        if (msg.offset) {
             initalizeMsg(offsetMsg(msg));
         }
     }
@@ -291,16 +352,36 @@ void loop() {
     }
 }
 
+void readAccel() {
+    int avgSpeed = 0;
+    int accelerator0 = analogRead(accelerator_1); // should be in the ecudata pointer
+    int accelerator1 = analogRead(accelerator_2);
+    if (accelerator0 < 5 || accelerator1 < 5) { // To check and clean if the value is jumping around
+        accelerator0 = 0;
+        accelerator1 = 0;
+    }
+}
+
+float errorcheck = abs(accelerator0 - accelerator1) / accelerator1; // Percent error
+if (errorcheck <= 0.1) {                                            // if the error is less than 10%
+    avgSpeed = (accelerator0 + accelerator1) / 2;
+} else {
+    Serial.println("Error accelerator reading"); // ERROR?
+}
+
+void shout() { // final push to tablet | arraysize: Teensy2SerialArrSize array: Teensy2SerialArr
+}
+
 void updateData(TTMsg msg) {
     if (msg.handle && !(msg.handle)(msg)) { // if the handle exists and returns true upon calling continue execution
         return;
     }
-    size_t i = 0;
-    if (msg.containsFlag) {                  // Readflags if they are expected
-        flagScan(msg.buf[i], msg.flagFuncs); // Only checking byte 0
-        i = 2;                               // Skip flag bytes
+    byte stop = 8;
+    if (msg.containsFlag) { // Readflags if they are expected
+        flagRead(msg);      // Check bytes
+        stop = 6;           // Skip flag bytes
     }
-    for (i = 0; i < 8; i += 2) {
+    for (byte i = 0; i < stop; i += 2) {
         if (msg.packets[i / 2]) {                     // If we have a sensor for this packet read and store it
             int val = analogRead(msg.packets[i / 2]); // TODO: Some sensors are digital not just analog!
             msg.data[i / 2] = val;                    // store the raw value
@@ -313,25 +394,24 @@ void updateData(TTMsg msg) {
 
 // IMPROVE: anyway to make this take advantage of the compiler?
 int decodeLilEdian(const byte low, const byte high) {
-    long value = 0;
-    long full_data = high * 255 + low;
+    int value = 0;
+    int full_data = high * 255 + low;
     if (high < 128) { // positive
         value = full_data;
     } else if (high > 128) { //neg
         value = map(full_data, 65280, 32640, 0, -32640);
-        return value;
     }
+    return value;
 }
 
-void flagRead(const TTMsg msg) {                 // read pins that map to flag variables
-    if (msg.containsFlag) {                      // double check it actually has the flags
-        byte flagByte;                           // initalize flagbyte
-        for (byte i = 0; i < 2; i++) {           // capped to first two bytes
-            flagByte = msg.buf[i];               // call byte
-            for (byte bit = 0; bit < 8; ++bit) { // iterate through byte bits
-                if (funcTbl[bit] && (flagByte >> bit) & 1) // 
-                    funcTbl[bit]();
-            }
+void flagRead(TTMsg msg) {                                          // read pins that map to flag variables
+    for (byte i = 7; i <= 6; i--) {                                 // capped to first two bytes
+        msg.buf[i] = 0;                                             // clear flags
+        for (byte bit = 0; bit < 8; ++bit) {                        // iterate through byte bits
+            if (msg.flagValues[bit]) {                              // check if there is a flag defined
+                msg.buf[i] |= digitalReadFast(msg.flagValues[bit]); // store flag
+            }                                                       //
+            msg.buf[i] = msg.buf[i] << 1;                           // shift bits
         }
     }
 }
@@ -339,8 +419,9 @@ void flagRead(const TTMsg msg) {                 // read pins that map to flag v
 void flagScan(const byte &flagByte, flagReader funcTbl[8]) { // Only used by read messages
     if (flagByte) {                                          // check if flag has any true bits
         for (byte bit = 0; bit < 8; ++bit) {                 // iterate though flag bits
-            if (funcTbl[bit] && (flagByte >> bit) & 1)       // check that we can do something if the bit is true
-                funcTbl[bit]();                              // call function based off bit pos
+            if (funcTbl[bit]) {                              // check that we can do something if the bit is true
+                funcTbl[bit]((flagByte >> bit) & 1);         // call function based off bit pos
+            }
         }
     }
 }
@@ -348,20 +429,20 @@ void flagScan(const byte &flagByte, flagReader funcTbl[8]) { // Only used by rea
 // Push data to andriod using Teensy UART | Eg. Serial1.write();
 // TODO: add way to push message blocks to andriod with Serial1.write
 // IMPROVE: make andriod decode bytes
-void writeTTMsg(const TTMsg msg) { // TODO: can't we just get rid of this?
+void writeTTMsg(TTMsg msg) { // TODO: can't we just get rid of this?
     // Write2Andriod(msg);
     Can1.write(msg);
 }
 
 void readTTMsg(TTMsg msg, const byte buf[8]) {
-    size_t i = 0;
+    byte stop = 8;
     if (msg.containsFlag) {              // Readflags if they are expected
         flagScan(buf[i], msg.flagFuncs); // Only checking byte 0
         msg.buf[i] = buf[i];             // Store byte 0 of flags
         msg.buf[i + 1] = buf[i + 1];     // also stores byte 1 for completion sake
-        i = 2;                           // Skip flag bytes
+        stop = 6;                        // Skip flag bytes
     }
-    for (i = i; i < 8; i += 2) {
+    for (byte i = 0; i < stop; i += 2) {
         if (msg.packets[i]) {                                     // are we expecting data on this packet?
             msg.data[i / 2] = decodeLilEdian(buf[i], buf[i + 1]); // decode and store
             // do we need to store the sepreate bytes? we are now storing the decoded data
@@ -379,31 +460,14 @@ void teensyRead(const CAN_message_t &dataIn) {
             break;
         };
     }
-
-    
-
 }
 
 // motor functions
 
 // TODO: test what the accelerators are outputting
 bool motorPushSpeed(TTMsg msg) {
-
-    int avgSpeed = 0;
-    int accelerator0 = analogRead(accelerator_1); // should be in the ecudata pointer
-    int accelerator1 = analogRead(accelerator_2);
-    if (accelerator0 < 5 || accelerator1 < 5) { // To check and clean if the value is jumping around
-        accelerator0 = 0;
-        accelerator1 = 0;
-    }
-
-    float errorcheck = abs(accelerator0 - accelerator1) / accelerator1; // Percent error
-    if (errorcheck <= 0.1) {                                            // if the error is less than 10%
-        avgSpeed = (accelerator0 + accelerator1) / 2;
-    } else {
-        Serial.println("Error accelerator reading"); // ERROR?
-    }
     // "the value of the tquore needs to be a power of 10 of the actual tourqe;" by dominck
+    // call ECEdata to accelerator value
     // TODO: torque vector function thing? probably goes here
     // also uses var: avgSpeed for the accelerator val
     int speed0 = analogRead(23); // speed of motor 0
@@ -429,9 +493,9 @@ void motorWriteSpeed(TTMsg msg, byte offset, bool direction, int speed) { // spe
     msg.buf[1] = high_byte;
     msg.buf[2] = 0; // Speed
     msg.buf[3] = 0;
-    msg.buf[4] = direction;    // Direction
-    msg.buf[5] = CAR_UNLOCKED; // Inverter enable byte
-    msg.buf[6] = 0;            // Last two are the maximum torque values || if 0 then defualt values are set
+    msg.buf[4] = direction;           // Direction
+    msg.buf[5] = START_BUTTON_PUSHED; // Inverter enable byte
+    msg.buf[6] = 0;                   // Last two are the maximum torque values || if 0 then defualt values are set
     msg.buf[7] = 0;
     writeTTMsg(msg);
 }
