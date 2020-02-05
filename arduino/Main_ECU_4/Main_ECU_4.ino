@@ -39,7 +39,13 @@ enum CanADR : uint32 {
 enum validData : byte {
     NIL = 0, // Pin0 must be sacrificed to the gods to have a nil value
 
-    // Motor data
+    // Motors
+    MotorLTemp = true,
+    MotorRTemp = true,
+    rpmLWheel = true, // Is this from MCs or motors themselves?
+    rpmRWheel = true,
+
+    // Motor controller
     // TEMP1
     PhaseATemp = true,
     PhaseBTemp = true,
@@ -78,6 +84,12 @@ enum validData : byte {
     // accelerator
     avgAccel = true, // Manually set
 
+    //T2T //TODO: Do these valid data belong here?
+    breakPress = 99,
+    steeringAng = 99,
+    carMode = true,
+    pedalAir = true,
+
     // Both Teensy's
     boardLed = 13,
     lightsIMDPin = 18,
@@ -85,7 +97,7 @@ enum validData : byte {
     // Teensy One    0x400-0x405
     // Send
     // button
-    startButtonPin = 14,
+    startButton = 14,
     IMDReadLight = 99,
     AMSReadLight = 99,
     // range
@@ -148,6 +160,10 @@ struct TTMsg : public CAN_message_t {                                           
     }
     TTMsg(uint32 i, const validData (&p)[4], const flagReader (&fF)[8], const validData (&fV)[8]) { // data storage for packets and reactive flags
         Base(i, (validData *)(&p), (flagReader *)(&fF), (validData *)(&fV));
+    }
+    TTMsg(uint32 i, validData p[4], flagReader fF[8], validData fV[8], msgHandle h) { // for duplication purposes
+        Base(i, p, fF, fV);
+        handle = h;
     }
 }
 
@@ -236,11 +252,12 @@ TTMsg WriteSpeed = TTMsg(SPEEDWRITE_ADD, motorPushSpeed);
 TTMsg MCReset = TTMsg(RESETMC_ADD - MOTOR_STATIC_OFFSET, MCResetFunc);
 TTMsg MCTempRead = TTMsg(RESETMC_ADD - MOTOR_STATIC_OFFSET, MCResetFunc);
 TTMsg MCMotorPos = TTMsg(MOTORPOS_ADD - MOTOR_STATIC_OFFSET, {angle});
+TTMsg MCFaults = TTMsg(FAULT_ADD, pruneFaults);
 TTMsg precharge = TTMsg(VOLTAGE_ADD - MOTOR_STATIC_OFFSET, prechargeFunc);
 TTMsg bmsStat = TTMsg(BMS_STATS_ADD, {BMSTemp, BMSVolt, BMSSOC});
-TTMsg motorL = TTMsg(MOTORL_ADD, {MOTORLTEMP});
-TTMsg motorR = TTMsg(MOTORR_ADD, {MOTORRTEMP});
-TTMsg T2TData = TTMsg(T2T_ADD, {avgAccel, breakPress, steeringAng}, {NULL, NULL, NULL, initalizeCar, NULL}, {IMDReadLight, AMSReadLight, CarMode, StartButton, pedalAir});
+TTMsg motorL = TTMsg(MOTORL_ADD, {MotorLTemp});
+TTMsg motorR = TTMsg(MOTORR_ADD, {MotorRTemp});
+TTMsg T2TData = TTMsg(T2T_ADD, {avgAccel, breakPress, steeringAng}, {NULL, NULL, NULL, initalizeCar, NULL}, {IMDReadLight, AMSReadLight, carMode, startButton, pedalAir});
 TTMsg T2T2Data = TTMsg(T2T2_ADD, {rpmLWheel, rpmRWheel});
 
 // anything that says MC, motor controller, needs to be doubled
@@ -260,6 +277,40 @@ struct ECUData {                       // pointers to data that will be used wit
 // TODO: calculate average speed
 // TODO: Active aero
 
+int T2AMsg[11];
+
+void pushT2A() { // final push to tablet | arraysize: Teensy2SerialArrSize array: Teensy2SerialArr
+    String s = "S ";
+    T2AMsg[0] = *ECUData.BMSVolt_p;
+    T2AMsg[1] = *ECUData.BMSTEMP_p;
+    T2AMsg[2] = 0; // avgSpeed go here
+    T2AMsg[3] = *ECUData.LMTEMP_P;
+    T2AMsg[4] = *ECUData.RMTEMP_P;
+    T2AMsg[5] = *ECUData.MCTEMP_P;
+    T2AMsg[6] = 0; // do both mc!
+    T2AMsg[7] = 0; // aero
+    T2AMsg[8] = *ECUData.BMSSOC_P;
+    T2AMsg[9] = *ECUData.BMSBUSCURRENT_P;
+    // T2AMsg[10] = buildFaultList(); //gets updated by fault handler
+    for (int i; i < 11; i++) {
+        s += T2AMsg[i] + " ";
+    }
+    Serial.println(s);
+}
+
+bool pruneFaults(TTMsg msg) { // figure which bits go where
+    int final = 0;
+    final = msg.buf[4];
+    final = final << 8;
+    final |= msg.buf[5];
+    final = final >> 3; // remove "reserved" bits
+    final = final << 1; // for IMD fault
+    final |= 1;         // imd fault 1:0
+    final = final << 1; // for BMS fault
+    final |= 1;         // bms fault 1:0
+    T2AMsg
+}
+
 // load messages as read or write
 TTMsg ReadTTMessages[]{
     precharge,
@@ -270,6 +321,10 @@ TTMsg WriteTTMessages[]{
     WriteSpeed,
     MCReset,
 };
+
+/* 
+    ----- END ECU specific data -----  
+                                        */
 
 void initalizeMsg(TTMsg msg) {
     // TODO: does this ensure no func is set for any flag?
@@ -286,10 +341,6 @@ TTMsg offsetMsg(TTMsg msg) { // duplicates message blocks; allows the offset blo
     TTMsg dup = TTMsg(msg.id + msg.offset, msg.packets, msg.flagFuncs, msg.flagValues, msg.handle);
     return dup;
 }
-
-/* 
-    ----- END ECU specific data -----  
-                                        */
 
 // Led blinkery stuff
 bool loopSwitch = false;
@@ -339,6 +390,7 @@ void setup() {
     Can1.enableFIFO();        // FirstInFirstOut
     LEDBlink();
     digitalWriteFast(boardLed, LOW);
+    pushT2A(); // Teensy to andriod
 }
 
 CAN_message_t dataIn; // Can data in obj
@@ -352,24 +404,19 @@ void loop() {
     }
 }
 
-void readAccel() {
-    int avgSpeed = 0;
-    int accelerator0 = analogRead(accelerator_1); // should be in the ecudata pointer
-    int accelerator1 = analogRead(accelerator_2);
-    if (accelerator0 < 5 || accelerator1 < 5) { // To check and clean if the value is jumping around
-        accelerator0 = 0;
-        accelerator1 = 0;
+void accelCheck() { // read accel numbrs and sync with T2T line
+    int a1 = analogRead(accelerator_1);
+    int a2 = analogRead(accelerator_2);
+    if (a1 < 5 || a2 < 5) { // To check and clean if the value is jumping around
+        a1 = 0;
+        a2 = 0;
     }
-}
-
-float errorcheck = abs(accelerator0 - accelerator1) / accelerator1; // Percent error
-if (errorcheck <= 0.1) {                                            // if the error is less than 10%
-    avgSpeed = (accelerator0 + accelerator1) / 2;
-} else {
-    Serial.println("Error accelerator reading"); // ERROR?
-}
-
-void shout() { // final push to tablet | arraysize: Teensy2SerialArrSize array: Teensy2SerialArr
+    float errorcheck = abs(a1 - a2) / a1;    // Percent error
+    if (errorcheck <= 0.1) {                 // if the error is less than 10%
+        *ECUData.T2TACCEL_P = (a1 + a2) / 2; // this is how you do it right?
+    } else {
+        Serial.println("Error accelerator reading"); // ERROR?
+    }
 }
 
 void updateData(TTMsg msg) {
@@ -437,9 +484,9 @@ void writeTTMsg(TTMsg msg) { // TODO: can't we just get rid of this?
 void readTTMsg(TTMsg msg, const byte buf[8]) {
     byte stop = 8;
     if (msg.containsFlag) {              // Readflags if they are expected
-        flagScan(buf[i], msg.flagFuncs); // Only checking byte 0
-        msg.buf[i] = buf[i];             // Store byte 0 of flags
-        msg.buf[i + 1] = buf[i + 1];     // also stores byte 1 for completion sake
+        flagScan(buf[7], msg.flagFuncs); // Only checking byte 0
+        msg.buf[7] = buf[7];             // Store byte 0 of flags
+        msg.buf[6] = buf[6];             // also stores byte 1 for completion sake
         stop = 6;                        // Skip flag bytes
     }
     for (byte i = 0; i < stop; i += 2) {
