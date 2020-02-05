@@ -212,6 +212,15 @@ void setCarMode(bool bit) {
 }
 
 // Handles
+void FAN {        
+  public:              // Access specifier
+    void myMethod() {  
+      if(int AvgSpeed < ){
+    }
+    else if(int AvgSpeed > ){
+      }
+    }
+};
 bool MCResetFunc(TTMsg msg) { // MC Fault reseter thing
     msg.ext = 0;
     msg.len = 8;
