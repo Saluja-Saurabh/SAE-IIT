@@ -12,7 +12,7 @@ typedef void (*flagReader)(bool); // functions that are called when flag bits ar
 
 // TODO: decide on addresses for all the sensors and bms
 enum CanADR : uint32 {
-    // motor
+    // motor controller
     SPEEDWRITE_ADD = 0x0C0,
     RESETMC_ADD = 0x0C1,
     TEMP1_ADD = 0x0A0,
@@ -24,10 +24,12 @@ enum CanADR : uint32 {
     CURRENT_ADD = 0x0A6,
     VOLTAGE_ADD = 0x0A7,
     FAULT_ADD = 0x0AB,
+    MCOFFSET = 0x0FF,
     // IDK
     INFO_ADD = 0x1A5,
     // BMS
     BMS_STATS_ADD = 0x250,
+    // motor
     MOTORL_ADD = 0xE0,
     MOTORR_ADD = 0x00,
     // TEENSY2TEENSY
@@ -148,26 +150,29 @@ struct TTMsg : public CAN_message_t {                                           
         flagFuncs = fF;
         flagValues = fV;
     }
-    TTMsg(uint32 i) { // blank msg
+    TTMsg(uint32 i, uint32 off = 0) { // blank msg
         Base(i);
-    };
-    TTMsg(uint32 i, msgHandle h) { // purely handled by separate functions
+        offset = off;
+    }
+    TTMsg(uint32 i, msgHandle h, uint32 off = 0) { // purely handled by separate functions
         Base(i);
         handle = h;
+        offset = off;
     }
-    TTMsg(uint32 i, const validData (&p)[4]) { // only stores data
+    TTMsg(uint32 i, const validData (&p)[4], uint32 off = 0) { // only stores data
         Base(i, (validData *)(&p));
+        offset = off;
     }
-    TTMsg(uint32 i, const validData (&p)[4], const flagReader (&fF)[8], const validData (&fV)[8]) { // data storage for packets and reactive flags
+    TTMsg(uint32 i, const validData (&p)[4], const flagReader (&fF)[8], const validData (&fV)[8], uint32 off = 0) { // data storage for packets and reactive flags
         Base(i, (validData *)(&p), (flagReader *)(&fF), (validData *)(&fV));
+        offset = off;
     }
-    TTMsg(uint32 i, validData p[4], flagReader fF[8], validData fV[8], msgHandle h) { // for duplication purposes
+    TTMsg(uint32 i, validData p[4], flagReader fF[8], validData fV[8], msgHandle h, uint32 off = 0) { // for duplication purposes
         Base(i, p, fF, fV);
         handle = h;
+        offset = off;
     }
-}
-
-; // IMPROVE: Flags can be extended to handle two bytes if it is really neccessary
+}; // IMPROVE: Flags can be extended to handle two bytes if it is really neccessary
 
 /* 
     ----- SRT ECU specific data -----  
@@ -212,15 +217,13 @@ void setCarMode(bool bit) {
 }
 
 // Handles
-void FAN {        
-  public:              // Access specifier
-    void myMethod() {  
-      if(int AvgSpeed < ){
-    }
-    else if(int AvgSpeed > ){
-      }
-    }
-};
+// TODO: figure out what this function is suppose todo
+// void fanReact() {
+//     if (AvgSpeed < 10) {
+//     } else if (AvgSpeed > 10) {
+//     }
+// }
+
 bool MCResetFunc(TTMsg msg) { // MC Fault reseter thing
     msg.ext = 0;
     msg.len = 8;
@@ -258,10 +261,10 @@ bool prechargeFunc(TTMsg msg) {
 // Initalize messages
 // TODO: do both MOTOR CONTROLLERS!
 TTMsg WriteSpeed = TTMsg(SPEEDWRITE_ADD, motorPushSpeed);
-TTMsg MCReset = TTMsg(RESETMC_ADD - MOTOR_STATIC_OFFSET, MCResetFunc);
-TTMsg MCTempRead = TTMsg(RESETMC_ADD - MOTOR_STATIC_OFFSET, MCResetFunc);
-TTMsg MCMotorPos = TTMsg(MOTORPOS_ADD - MOTOR_STATIC_OFFSET, {angle});
-TTMsg MCFaults = TTMsg(FAULT_ADD, pruneFaults);
+TTMsg MCReset = TTMsg(RESETMC_ADD - MOTOR_STATIC_OFFSET, MCResetFunc, MCOFFSET);
+TTMsg MCTempRead = TTMsg(RESETMC_ADD - MOTOR_STATIC_OFFSET, MCResetFunc, MCOFFSET);
+TTMsg MCMotorPos = TTMsg(MOTORPOS_ADD - MOTOR_STATIC_OFFSET, {angle}, MCOFFSET);
+TTMsg MCFaults = TTMsg(FAULT_ADD, pruneFaults, MCOFFSET);
 TTMsg precharge = TTMsg(VOLTAGE_ADD - MOTOR_STATIC_OFFSET, prechargeFunc);
 TTMsg bmsStat = TTMsg(BMS_STATS_ADD, {BMSTemp, BMSVolt, BMSSOC});
 TTMsg motorL = TTMsg(MOTORL_ADD, {MotorLTemp});
