@@ -167,6 +167,10 @@ struct TTMsg : public CAN_message_t {                                           
         Base(i, (validData *)(&p), (flagReader *)(&fF), (validData *)(&fV));
         offset = off;
     }
+    TTMsg(TTMsg msg, uint32 off) { // explicit duping
+        Base(msg.id + msg.offset, msg.packets, msg.flagFuncs, msg.flagValues);
+        handle = msg.handle;
+    }
     TTMsg(uint32 i, validData p[4], flagReader fF[8], validData fV[8], msgHandle h, uint32 off = 0) { // for duplication purposes
         Base(i, p, fF, fV);
         handle = h;
@@ -177,6 +181,7 @@ struct TTMsg : public CAN_message_t {                                           
 /* 
     ----- SRT ECU specific data -----  
                                         */
+struct ECUData;
 
 // Globals!?
 uint32 MOTOR_OFFSET = 0xe0;         // offset for motor ids
@@ -207,13 +212,6 @@ void IMDSetLight(bool bit) {
 
 void AMDSetLight(bool bit) {
     digitalWriteFast(AMSLight, bit);
-}
-
-void setCarMode(bool bit) {
-    // TODO: ensure car is not moving
-    if (*ECUData.MCMotorAng < 5) { // rpm = motor controller rpm
-        CAR_MODE = bit;
-    }
 }
 
 // Handles
@@ -256,21 +254,28 @@ bool prechargeFunc(TTMsg msg) {
         digitalWrite(PrechargeairPin, HIGH);  //close air
         digitalWrite(PrechargeRelayPin, LOW); //precharge is off
     }
+    return false;
 }
 
 // Initalize messages
-// TODO: do both MOTOR CONTROLLERS!
-TTMsg WriteSpeed = TTMsg(SPEEDWRITE_ADD, motorPushSpeed);
-TTMsg MCReset = TTMsg(RESETMC_ADD - MOTOR_STATIC_OFFSET, MCResetFunc, MCOFFSET);
-TTMsg MCTempRead = TTMsg(RESETMC_ADD - MOTOR_STATIC_OFFSET, MCResetFunc, MCOFFSET);
-TTMsg MCMotorPos = TTMsg(MOTORPOS_ADD - MOTOR_STATIC_OFFSET, {angle}, MCOFFSET);
-TTMsg MCFaults = TTMsg(FAULT_ADD, pruneFaults, MCOFFSET);
-TTMsg precharge = TTMsg(VOLTAGE_ADD - MOTOR_STATIC_OFFSET, prechargeFunc);
-TTMsg bmsStat = TTMsg(BMS_STATS_ADD, {BMSTemp, BMSVolt, BMSSOC});
-TTMsg motorL = TTMsg(MOTORL_ADD, {MotorLTemp});
-TTMsg motorR = TTMsg(MOTORR_ADD, {MotorRTemp});
-TTMsg T2TData = TTMsg(T2T_ADD, {avgAccel, breakPress, steeringAng}, {NULL, NULL, NULL, initalizeCar, NULL}, {IMDReadLight, AMSReadLight, carMode, startButton, pedalAir});
-TTMsg T2T2Data = TTMsg(T2T2_ADD, {rpmLWheel, rpmRWheel});
+//Both MCs
+struct TTMsg WriteSpeed = TTMsg(SPEEDWRITE_ADD, motorPushSpeed);
+//MCs
+struct TTMsg MCReset0 = TTMsg(RESETMC_ADD - MOTOR_STATIC_OFFSET, MCResetFunc);
+struct TTMsg MCReset1 = TTMsg(MCReset0, MCOFFSET);
+struct TTMsg MCTempRead0 = TTMsg(RESETMC_ADD - MOTOR_STATIC_OFFSET, MCResetFunc);
+struct TTMsg MCTempRead1 = TTMsg(MCTempRead0, MCOFFSET);
+struct TTMsg MCMotorPos0 = TTMsg(MOTORPOS_ADD - MOTOR_STATIC_OFFSET, {angle});
+struct TTMsg MCMotorPos1 = TTMsg(MCMotorPos0, MCOFFSET);
+struct TTMsg MCFaults0 = TTMsg(FAULT_ADD, pruneFaults);
+struct TTMsg MCFaults1 = TTMsg(MCFaults0, MCOFFSET);
+// Others
+struct TTMsg precharge = TTMsg(VOLTAGE_ADD - MOTOR_STATIC_OFFSET, prechargeFunc);
+struct TTMsg bmsStat = TTMsg(BMS_STATS_ADD, {BMSTemp, BMSVolt, BMSSOC});
+struct TTMsg motorL = TTMsg(MOTORL_ADD, {MotorLTemp});
+struct TTMsg motorR = TTMsg(MOTORR_ADD, {MotorRTemp});
+struct TTMsg T2TData = TTMsg(T2T_ADD, {avgAccel, breakPress, steeringAng}, {NULL, NULL, NULL, initalizeCar, NULL}, {IMDReadLight, AMSReadLight, carMode, startButton, pedalAir});
+struct TTMsg T2T2Data = TTMsg(T2T2_ADD, {rpmLWheel, rpmRWheel});
 
 // anything that says MC, motor controller, needs to be doubled
 struct ECUData {                       // pointers to data that will be used within teensy itself | ex. BMS_VOLTAGE
@@ -278,16 +283,26 @@ struct ECUData {                       // pointers to data that will be used wit
     int *BMSTEMP_p = &bmsStat.data[0];
     int *LMTEMP_P = &motorL.data[0];
     int *RMTEMP_P = &motorR.data[0];
-    int *MCMotorAng = &MCMotorPos.data[0];
-    int *MCTEMP_P = &MCTempRead.data[0];
     int *BMSSOC_P = &bmsStat.data[2];        // state of charge
     int *BMSBUSCURRENT_P = &bmsStat.data[2]; // bus current
     int *T2TACCEL_P = &T2TData.data[0];      // avgAccel
-} ECUData;                                   // IMPROVE: make more readable way to store data
+    //MCs
+    int *MCMotorAng0 = &MCMotorPos0.data[0];
+    int *MCMotorAng1 = &MCMotorPos1.data[0];
+    int *MCTEMP_P0 = &MCTempRead0.data[0];
+    int *MCTEMP_P1 = &MCTempRead1.data[0];
+};
 
 // TODO: faults! IMD is digital and BMS is seperate address
 // TODO: calculate average speed
 // TODO: Active aero
+
+void setCarMode(bool bit) {
+    // TODO: ensure car is not moving
+    if (*ECUData.MCMotorAng0 < 5) { // rpm = motor controller rpm only for first MC
+        CAR_MODE = bit;
+    }
+}
 
 int T2AMsg[11];
 
@@ -298,9 +313,9 @@ void pushT2A() { // final push to tablet | arraysize: Teensy2SerialArrSize array
     T2AMsg[2] = 0; // avgSpeed go here
     T2AMsg[3] = *ECUData.LMTEMP_P;
     T2AMsg[4] = *ECUData.RMTEMP_P;
-    T2AMsg[5] = *ECUData.MCTEMP_P;
-    T2AMsg[6] = 0; // do both mc!
-    T2AMsg[7] = 0; // aero
+    T2AMsg[5] = (*ECUData.MCTEMP_P0 + *ECUData.MCTEMP_P1) / 2; // avg of temps?
+    T2AMsg[6] = 0;                                             // do both mc!
+    T2AMsg[7] = 0;                                             // aero
     T2AMsg[8] = *ECUData.BMSSOC_P;
     T2AMsg[9] = *ECUData.BMSBUSCURRENT_P;
     // T2AMsg[10] = buildFaultList(); //gets updated by fault handler
@@ -320,7 +335,8 @@ bool pruneFaults(TTMsg msg) { // figure which bits go where
     final |= 1;         // imd fault 1:0
     final = final << 1; // for BMS fault
     final |= 1;         // bms fault 1:0
-    T2AMsg
+    // T2AMsg
+    return false;
 }
 
 // load messages as read or write
@@ -331,7 +347,8 @@ TTMsg ReadTTMessages[]{
 
 TTMsg WriteTTMessages[]{
     WriteSpeed,
-    MCReset,
+    MCReset0,
+    MCReset1,
 };
 
 /* 
