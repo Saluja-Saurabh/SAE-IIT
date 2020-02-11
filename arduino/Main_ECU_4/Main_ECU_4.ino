@@ -181,10 +181,31 @@ struct TTMsg : public CAN_message_t {                                           
 /* 
     ----- SRT ECU specific data -----  
                                         */
-struct ECUData;
+struct ECUData {    //IMPROVE: find a better solution to this circular dependancy with data
+    int *BMSVolt_p; // we must keep track of what is being stored where in the packet setup
+    int *BMSTEMP_p;
+    int *LMTEMP_P;
+    int *RMTEMP_P;
+    int *BMSSOC_P;        // state of charge
+    int *BMSBUSCURRENT_P; // bus current
+    int *T2TACCEL_P;      // avgAccel
+    //MCs
+    int *MCMotorAng0;
+    int *MCMotorAng1;
+    int *MCTEMP_P0;
+    int *MCTEMP_P1;
+    int *MCVOLT_P01;
+    int *MCVOLT_P02;
+    int *MCVOLT_P11;
+    int *MCVOLT_P12;
+    uint8_t *MCFAULT_P00;
+    uint8_t *MCFAULT_P01;
+    uint8_t *MCFAULT_P10;
+    uint8_t *MCFAULT_P11;
+} ECUData;
 
 // Globals!?
-uint32 MOTOR_OFFSET = 0xe0;         // offset for motor ids
+uint32 MOTOR_OFFSET = 0xe0;         // offset for motor ids // is this actually just for the MCs?
 uint32 MOTOR_STATIC_OFFSET = 0x0A0; // IMPROVE: auto set this global offset to addresses
 bool DO_PRECHARGE = true;           // Precharge latching variable
 bool START_BUTTON_PUSHED = false;   // MC enable bit state
@@ -192,9 +213,7 @@ bool PEDAL_ERROR = false;
 bool CAR_MODE = false; // true: RaceMode false: EcoMode
 const byte Teensy2SerialArrSize = 12;
 int Teensy2SerialArr[Teensy2SerialArrSize];
-int Send2SerialADD = {
-
-};
+int Send2SerialADD = 0; // ????
 
 // Flag Handles
 void initalizeCar(bool bit) {
@@ -241,10 +260,11 @@ bool prechargeFunc(TTMsg msg) {
     if (digitalRead(dischargeactive_pin)) { // if airs have no power, then precharge must be checked
         DO_PRECHARGE = 1;
     }
-    float MC_voltage = abs(decodeLilEdian(msg.buf[0], msg.buf[1])) / 10; //Returns in power of 10s
-    if (!digitalRead(dischargeactive_pin) && DO_PRECHARGE) {             //if airs have no power but had before, then begin precharge circuit
-        digitalWrite(PrechargeairPin, LOW);                              //Keep air open
-        digitalWrite(PrechargeRelayPin, HIGH);                           //precharge is closed
+    // MC average?
+    float MC_voltage = max(abs(decodeLilEdian(*ECUData.MCVOLT_P01, *ECUData.MCVOLT_P02)), abs(decodeLilEdian(*ECUData.MCVOLT_P11, *ECUData.MCVOLT_P12))) / 10; //Returns in power of 10s
+    if (!digitalRead(dischargeactive_pin) && DO_PRECHARGE) {                                                                                                   //if airs have no power but had before, then begin precharge circuit
+        digitalWrite(PrechargeairPin, LOW);                                                                                                                    //Keep air open
+        digitalWrite(PrechargeRelayPin, HIGH);                                                                                                                 //precharge is closed
 
         if (*ECUData.BMSVolt_p >= 150 && (*ECUData.BMSVolt_p * 0.9) <= MC_voltage) { // BMS voltage is a global
             DO_PRECHARGE = 0;
@@ -260,40 +280,49 @@ bool prechargeFunc(TTMsg msg) {
 // Initalize messages
 //Both MCs
 struct TTMsg WriteSpeed = TTMsg(SPEEDWRITE_ADD, motorPushSpeed);
-//MCs
+//MCs //IMPROVE: better solution for both MCs instead of just 'hardcoding' both seperate
 struct TTMsg MCReset0 = TTMsg(RESETMC_ADD - MOTOR_STATIC_OFFSET, MCResetFunc);
 struct TTMsg MCReset1 = TTMsg(MCReset0, MCOFFSET);
 struct TTMsg MCTempRead0 = TTMsg(RESETMC_ADD - MOTOR_STATIC_OFFSET, MCResetFunc);
 struct TTMsg MCTempRead1 = TTMsg(MCTempRead0, MCOFFSET);
 struct TTMsg MCMotorPos0 = TTMsg(MOTORPOS_ADD - MOTOR_STATIC_OFFSET, {angle});
 struct TTMsg MCMotorPos1 = TTMsg(MCMotorPos0, MCOFFSET);
-struct TTMsg MCFaults0 = TTMsg(FAULT_ADD, pruneFaults);
+struct TTMsg MCFaults0 = TTMsg(FAULT_ADD);
 struct TTMsg MCFaults1 = TTMsg(MCFaults0, MCOFFSET);
+struct TTMsg MCVolt0 = TTMsg(VOLTAGE_ADD - MOTOR_STATIC_OFFSET, prechargeFunc);
+struct TTMsg MCVolt1 = TTMsg(MCVolt0, MCOFFSET);
 // Others
-struct TTMsg precharge = TTMsg(VOLTAGE_ADD - MOTOR_STATIC_OFFSET, prechargeFunc);
 struct TTMsg bmsStat = TTMsg(BMS_STATS_ADD, {BMSTemp, BMSVolt, BMSSOC});
 struct TTMsg motorL = TTMsg(MOTORL_ADD, {MotorLTemp});
 struct TTMsg motorR = TTMsg(MOTORR_ADD, {MotorRTemp});
 struct TTMsg T2TData = TTMsg(T2T_ADD, {avgAccel, breakPress, steeringAng}, {NULL, NULL, NULL, initalizeCar, NULL}, {IMDReadLight, AMSReadLight, carMode, startButton, pedalAir});
 struct TTMsg T2T2Data = TTMsg(T2T2_ADD, {rpmLWheel, rpmRWheel});
 
-// anything that says MC, motor controller, needs to be doubled
-struct ECUData {                       // pointers to data that will be used within teensy itself | ex. BMS_VOLTAGE
-    int *BMSVolt_p = &bmsStat.data[1]; // we must keep track of what is being stored where in the packet setup
-    int *BMSTEMP_p = &bmsStat.data[0];
-    int *LMTEMP_P = &motorL.data[0];
-    int *RMTEMP_P = &motorR.data[0];
-    int *BMSSOC_P = &bmsStat.data[2];        // state of charge
-    int *BMSBUSCURRENT_P = &bmsStat.data[2]; // bus current
-    int *T2TACCEL_P = &T2TData.data[0];      // avgAccel
-    //MCs
-    int *MCMotorAng0 = &MCMotorPos0.data[0];
-    int *MCMotorAng1 = &MCMotorPos1.data[0];
-    int *MCTEMP_P0 = &MCTempRead0.data[0];
-    int *MCTEMP_P1 = &MCTempRead1.data[0];
-};
+void initECUPointers() { // after all is declared set the appropriate pointers
+    // anything that says MC, motor controller, needs to be doubled
+    // pointers to data that will be used within teensy itself | ex. BMS_VOLTAGE
+    ECUData.BMSVolt_p = &bmsStat.data[1]; // we must keep track of what is being stored where in the packet setup
+    ECUData.BMSTEMP_p = &bmsStat.data[0];
+    ECUData.LMTEMP_P = &motorL.data[0];
+    ECUData.RMTEMP_P = &motorR.data[0];
+    ECUData.BMSSOC_P = &bmsStat.data[2];        // state of charge
+    ECUData.BMSBUSCURRENT_P = &bmsStat.data[2]; // bus current
+    ECUData.T2TACCEL_P = &T2TData.data[0];      // avgAccel
+    //MCs //IMPROVE: maybe put both MCs in small couple tables
+    ECUData.MCMotorAng0 = &MCMotorPos0.data[0];
+    ECUData.MCMotorAng1 = &MCMotorPos1.data[0];
+    ECUData.MCTEMP_P0 = &MCTempRead0.data[0];
+    ECUData.MCTEMP_P1 = &MCTempRead1.data[0];
+    ECUData.MCVOLT_P01 = &MCVolt0.data[0];
+    ECUData.MCVOLT_P02 = &MCVolt0.data[1];
+    ECUData.MCVOLT_P11 = &MCVolt1.data[0];
+    ECUData.MCVOLT_P12 = &MCVolt1.data[1];
+    ECUData.MCFAULT_P00 = &MCFaults0.buf[4]
+    ECUData.MCFAULT_P01 = &MCFaults0.buf[5]
+    ECUData.MCFAULT_P10 = &MCFaults1.buf[4]
+    ECUData.MCFAULT_P11 = &MCFaults1.buf[5]
+}
 
-// TODO: faults! IMD is digital and BMS is seperate address
 // TODO: calculate average speed
 // TODO: Active aero
 
@@ -318,30 +347,33 @@ void pushT2A() { // final push to tablet | arraysize: Teensy2SerialArrSize array
     T2AMsg[7] = 0;                                             // aero
     T2AMsg[8] = *ECUData.BMSSOC_P;
     T2AMsg[9] = *ECUData.BMSBUSCURRENT_P;
-    // T2AMsg[10] = buildFaultList(); //gets updated by fault handler
+    pruneFaults();
+    // T2AMsg[10] = buildFaultList(); //gets updated by pruner
     for (int i; i < 11; i++) {
         s += T2AMsg[i] + " ";
     }
     Serial.println(s);
 }
 
-bool pruneFaults(TTMsg msg) { // figure which bits go where
+//TODO: where do I get IMD and BMS fault from?
+bool pruneFaults() { // figure which bits go where
     int final = 0;
-    final = msg.buf[4];
+    final = ECUData.MCFAULT_P00 | ECUData.MCFAULT_P10; // or faults to check both
     final = final << 8;
-    final |= msg.buf[5];
+    final |= ECUData.MCFAULT_P01 | ECUData.MCFAULT_P11;
     final = final >> 3; // remove "reserved" bits
     final = final << 1; // for IMD fault
     final |= 1;         // imd fault 1:0
     final = final << 1; // for BMS fault
     final |= 1;         // bms fault 1:0
-    // T2AMsg
+    T2AMsg[10] = final;
     return false;
 }
 
 // load messages as read or write
 TTMsg ReadTTMessages[]{
-    precharge,
+    MCVolt0,
+    MCVolt1,
     bmsStat,
 };
 
@@ -412,7 +444,7 @@ void setup() {
             initalizeMsg(offsetMsg(msg));
         }
     }
-
+    initECUPointers();
     pinMode(2, OUTPUT); // Fusion Tech's Dual CAN-Bus R pin switch
     digitalWrite(2, LOW);
     Can1.setBaudRate(500000); // Speeed
