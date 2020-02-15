@@ -92,38 +92,56 @@ enum validData : byte {
     carMode = true,
     pedalAir = true,
 
-    // Both Teensy's
+    // Both Teensy's // to keep it consistant duplicate entires will be made for other pins
     boardLed = 13,
-    lightsIMDPin = 18,
+    // lightsIMDPin = 18, // USED ON SCHEMATIC // also conflict with lightsBMSPin
 
-    // Teensy One    0x400-0x405
-    // Send
-    // button
-    startButton = 14,
-    IMDReadLight = 99,
-    AMSReadLight = 99,
-    // range
-    steeringPin = 15,
-    brakepressurePin = 16,
-    accelerator_1 = 21,
-    accelerator_2 = 21, // for double checking
-                        // Receive
-                        // buttons
-    lightsBMSPin = 18,
+    /*
+            Teensy One      Address: 0x400 - 0x405
+    */
+    //      button      //
+    sig_startButton = 2,
+    sig_IMDReadLight = 99, // NOT ON SCHEMATIC
+    sig_AMSReadLight = 99, // NOT ON SCHEMATIC
+    //      range       //
+    sig_Wheel2 = 21,
+    sig_Wheel1 = 20,
+    sig_accel2 = 18,
+    sig_accel1 = 16,
+    sig_brakePress = 14,
+    // lightsBMSPin = 18, // USED ON SCHEMATIC // also conflict with lightsIMDPin
 
-    // Teensy Two       0x406-0x40A
-    // Send
-    // button
-    // special
-    // IMD = 15, // ????????????????????????
-    IMDLight = 99,
-    AMSLight = 99,
-    PrechargeairPin = 99,
-    brakeLight = 17,
-    PrechargeRelayPin = 99,
-    dischargeactive_pin = 99,
-    pump = 18, // don't worry ;;;;;)))))
+    /*
+            Teensy Two      Address: 0x406 - 0x40A
+    */
+    //      send        //
+    PWM_servo1 = 8,
+    PWM_servo2 = 27, // BROKEN: pin 27 is not PWM?
+    //      button      //
+    sig_startButton = 2,
+    sig_32v = 0,     // ON/OFF
+    sig_charger = 5, // ON/OFF
+    //      special     //
+    sig_precharge = 9,
+    sig_prechargeAir = 10,
+    sig_brakeLight = 7,
+    sig_fans = 24, // ON/OFF
+    sig_shutdownState = 25,
+    sig_MC = 26, // ON/OFF
+    PWM_Fan1 = 23,
+    PWM_Fan2 = 22,
+    PWM_Fan3 = 21,
+    PWM_Fan4 = 20,
+    sig_IMDFault = 19,
+    sig_BMSFault = 18,
+    ANL_pump = 21,            // analog only!
+    PrechargeRelayPin = 99,   // NOT ON SCHEMATIC
+    dischargeactive_pin = 99, // NOT ON SCHEMATIC
+    IMDLight = 99,            // NOT ON SCHEMATIC
+    AMSLight = 99,            // NOT ON SCHEMATIC
 
+    //      unknown      //
+    sig_buzzer = 6,
 };
 
 /*
@@ -263,7 +281,7 @@ bool prechargeFunc(TTMsg msg) {
     // MC average?
     float MC_voltage = max(abs(decodeLilEdian(*ECUData.MCVOLT_P01, *ECUData.MCVOLT_P02)), abs(decodeLilEdian(*ECUData.MCVOLT_P11, *ECUData.MCVOLT_P12))) / 10; //Returns in power of 10s
     if (!digitalRead(dischargeactive_pin) && DO_PRECHARGE) {                                                                                                   //if airs have no power but had before, then begin precharge circuit
-        digitalWrite(PrechargeairPin, LOW);                                                                                                                    //Keep air open
+        digitalWrite(sig_prechargeAir, LOW);                                                                                                                   //Keep air open
         digitalWrite(PrechargeRelayPin, HIGH);                                                                                                                 //precharge is closed
 
         if (*ECUData.BMSVolt_p >= 150 && (*ECUData.BMSVolt_p * 0.9) <= MC_voltage) { // BMS voltage is a global
@@ -271,7 +289,7 @@ bool prechargeFunc(TTMsg msg) {
         }
     } else { // Can use any MCs voltage, will be the same, must be greater than 270V (0.9 * 300V)
         // Should return to normal state
-        digitalWrite(PrechargeairPin, HIGH);  //close air
+        digitalWrite(sig_prechargeAir, HIGH); //close air
         digitalWrite(PrechargeRelayPin, LOW); //precharge is off
     }
     return false;
@@ -295,7 +313,7 @@ struct TTMsg MCVolt1 = TTMsg(MCVolt0, MCOFFSET);
 struct TTMsg bmsStat = TTMsg(BMS_STATS_ADD, {BMSTemp, BMSVolt, BMSSOC});
 struct TTMsg motorL = TTMsg(MOTORL_ADD, {MotorLTemp});
 struct TTMsg motorR = TTMsg(MOTORR_ADD, {MotorRTemp});
-struct TTMsg T2TData = TTMsg(T2T_ADD, {avgAccel, breakPress, steeringAng}, {NULL, NULL, NULL, initalizeCar, NULL}, {IMDReadLight, AMSReadLight, carMode, startButton, pedalAir});
+struct TTMsg T2TData = TTMsg(T2T_ADD, {avgAccel, breakPress, steeringAng}, {NULL, NULL, NULL, initalizeCar, NULL}, {sig_IMDReadLight, sig_AMSReadLight, carMode, sig_startButton, pedalAir});
 struct TTMsg T2T2Data = TTMsg(T2T2_ADD, {rpmLWheel, rpmRWheel});
 
 void initECUPointers() { // after all is declared set the appropriate pointers
@@ -308,7 +326,7 @@ void initECUPointers() { // after all is declared set the appropriate pointers
     ECUData.BMSSOC_P = &bmsStat.data[2];        // state of charge
     ECUData.BMSBUSCURRENT_P = &bmsStat.data[2]; // bus current
     ECUData.T2TACCEL_P = &T2TData.data[0];      // avgAccel
-    //MCs //IMPROVE: maybe put both MCs in small couple tables
+    //MCs //IMPROVE: maybe put both MCs in individual sub tables?
     ECUData.MCMotorAng0 = &MCMotorPos0.data[0];
     ECUData.MCMotorAng1 = &MCMotorPos1.data[0];
     ECUData.MCTEMP_P0 = &MCTempRead0.data[0];
@@ -317,10 +335,10 @@ void initECUPointers() { // after all is declared set the appropriate pointers
     ECUData.MCVOLT_P02 = &MCVolt0.data[1];
     ECUData.MCVOLT_P11 = &MCVolt1.data[0];
     ECUData.MCVOLT_P12 = &MCVolt1.data[1];
-    ECUData.MCFAULT_P00 = &MCFaults0.buf[4]
-    ECUData.MCFAULT_P01 = &MCFaults0.buf[5]
-    ECUData.MCFAULT_P10 = &MCFaults1.buf[4]
-    ECUData.MCFAULT_P11 = &MCFaults1.buf[5]
+    ECUData.MCFAULT_P00 = &MCFaults0.buf[4];
+    ECUData.MCFAULT_P01 = &MCFaults0.buf[5];
+    ECUData.MCFAULT_P10 = &MCFaults1.buf[4];
+    ECUData.MCFAULT_P11 = &MCFaults1.buf[5];
 }
 
 // TODO: calculate average speed
@@ -358,9 +376,9 @@ void pushT2A() { // final push to tablet | arraysize: Teensy2SerialArrSize array
 //TODO: where do I get IMD and BMS fault from?
 bool pruneFaults() { // figure which bits go where
     int final = 0;
-    final = ECUData.MCFAULT_P00 | ECUData.MCFAULT_P10; // or faults to check both
+    final = *ECUData.MCFAULT_P00 | *ECUData.MCFAULT_P10; // or faults to check both
     final = final << 8;
-    final |= ECUData.MCFAULT_P01 | ECUData.MCFAULT_P11;
+    final |= *ECUData.MCFAULT_P01 | *ECUData.MCFAULT_P11;
     final = final >> 3; // remove "reserved" bits
     final = final << 1; // for IMD fault
     final |= 1;         // imd fault 1:0
@@ -466,8 +484,8 @@ void loop() {
 }
 
 void accelCheck() { // read accel numbrs and sync with T2T line
-    int a1 = analogRead(accelerator_1);
-    int a2 = analogRead(accelerator_2);
+    int a1 = analogRead(sig_accel1);
+    int a2 = analogRead(sig_accel2);
     if (a1 < 5 || a2 < 5) { // To check and clean if the value is jumping around
         a1 = 0;
         a2 = 0;
