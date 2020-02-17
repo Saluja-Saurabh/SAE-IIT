@@ -101,8 +101,8 @@ enum validData : byte {
     */
     //      button      //
     sig_startButton = 2,
-    sig_IMDReadLight = 99, // NOT ON SCHEMATIC
-    sig_AMSReadLight = 99, // NOT ON SCHEMATIC
+    sig_IMDSetLight = 99, // NOT ON SCHEMATIC
+    sig_AMSSetLight = 99, // NOT ON SCHEMATIC
     //      range       //
     sig_Wheel2 = 21,
     sig_Wheel1 = 20,
@@ -133,12 +133,8 @@ enum validData : byte {
     PWM_Fan3 = 21,
     PWM_Fan4 = 20,
     sig_IMDFault = 19,
-    sig_BMSFault = 18,
-    ANL_pump = 21,            // analog only!
-    PrechargeRelayPin = 99,   // NOT ON SCHEMATIC
-    dischargeactive_pin = 99, // NOT ON SCHEMATIC
-    IMDLight = 99,            // NOT ON SCHEMATIC
-    AMSLight = 99,            // NOT ON SCHEMATIC
+    sig_BMSFault = 18, // AMS Light
+    ANL_pump = 21,     // analog only!
 
     //      unknown      //
     sig_buzzer = 6,
@@ -220,6 +216,7 @@ struct ECUData {    //IMPROVE: find a better solution to this circular dependanc
     uint8_t *MCFAULT_P01;
     uint8_t *MCFAULT_P10;
     uint8_t *MCFAULT_P11;
+    uint8_t *T2TFlags;
 } ECUData;
 
 // Globals!?
@@ -241,14 +238,6 @@ void initalizeCar(bool bit) {
 
 void setPedalState(bool bit) {
     PEDAL_ERROR = bit;
-}
-
-void IMDSetLight(bool bit) {
-    digitalWriteFast(IMDLight, bit);
-}
-
-void AMDSetLight(bool bit) {
-    digitalWriteFast(AMSLight, bit);
 }
 
 // Handles
@@ -275,14 +264,15 @@ bool MCResetFunc(TTMsg msg) { // MC Fault reseter thing
 } // IMPROVE: There may be reliability issues with only sending one?
 
 bool prechargeFunc(TTMsg msg) {
-    if (digitalRead(dischargeactive_pin)) { // if airs have no power, then precharge must be checked
+    if (digitalRead(sig_shutdownState)) { // if airs have no power, then precharge must be checked
         DO_PRECHARGE = 1;
+        START_BUTTON_PUSHED = false;
     }
     // MC average?
     float MC_voltage = max(abs(decodeLilEdian(*ECUData.MCVOLT_P01, *ECUData.MCVOLT_P02)), abs(decodeLilEdian(*ECUData.MCVOLT_P11, *ECUData.MCVOLT_P12))) / 10; //Returns in power of 10s
-    if (!digitalRead(dischargeactive_pin) && DO_PRECHARGE) {                                                                                                   //if airs have no power but had before, then begin precharge circuit
+    if (!digitalRead(sig_shutdownState) && DO_PRECHARGE) {                                                                                                     //if airs have no power but had before, then begin precharge circuit
         digitalWrite(sig_prechargeAir, LOW);                                                                                                                   //Keep air open
-        digitalWrite(PrechargeRelayPin, HIGH);                                                                                                                 //precharge is closed
+        digitalWrite(sig_precharge, HIGH);                                                                                                                     //precharge is closed
 
         if (*ECUData.BMSVolt_p >= 150 && (*ECUData.BMSVolt_p * 0.9) <= MC_voltage) { // BMS voltage is a global
             DO_PRECHARGE = 0;
@@ -290,9 +280,17 @@ bool prechargeFunc(TTMsg msg) {
     } else { // Can use any MCs voltage, will be the same, must be greater than 270V (0.9 * 300V)
         // Should return to normal state
         digitalWrite(sig_prechargeAir, HIGH); //close air
-        digitalWrite(PrechargeRelayPin, LOW); //precharge is off
+        digitalWrite(sig_precharge, LOW);     //precharge is off
     }
     return false;
+}
+
+void setIMDLight(bool pin){
+    digitalWriteFast(sig_IMDSetLight, pin);
+}
+
+void setBMSLight(bool pin){
+    digitalWriteFast(sig_AMSSetLight, pin);
 }
 
 // Initalize messages
@@ -313,7 +311,7 @@ struct TTMsg MCVolt1 = TTMsg(MCVolt0, MCOFFSET);
 struct TTMsg bmsStat = TTMsg(BMS_STATS_ADD, {BMSTemp, BMSVolt, BMSSOC});
 struct TTMsg motorL = TTMsg(MOTORL_ADD, {MotorLTemp});
 struct TTMsg motorR = TTMsg(MOTORR_ADD, {MotorRTemp});
-struct TTMsg T2TData = TTMsg(T2T_ADD, {avgAccel, breakPress, steeringAng}, {NULL, NULL, NULL, initalizeCar, NULL}, {sig_IMDReadLight, sig_AMSReadLight, carMode, sig_startButton, pedalAir});
+struct TTMsg T2TData = TTMsg(T2T_ADD, {avgAccel, breakPress, steeringAng}, {setIMDLight, setBMSLight, NULL, initalizeCar, NULL}, {sig_IMDFault, sig_BMSFault, carMode, sig_startButton, pedalAir});
 struct TTMsg T2T2Data = TTMsg(T2T2_ADD, {rpmLWheel, rpmRWheel});
 
 void initECUPointers() { // after all is declared set the appropriate pointers
@@ -326,7 +324,7 @@ void initECUPointers() { // after all is declared set the appropriate pointers
     ECUData.BMSSOC_P = &bmsStat.data[2];        // state of charge
     ECUData.BMSBUSCURRENT_P = &bmsStat.data[2]; // bus current
     ECUData.T2TACCEL_P = &T2TData.data[0];      // avgAccel
-    //MCs //IMPROVE: maybe put both MCs in individual sub tables?
+    // MCs //IMPROVE: maybe put both MCs in individual sub tables?
     ECUData.MCMotorAng0 = &MCMotorPos0.data[0];
     ECUData.MCMotorAng1 = &MCMotorPos1.data[0];
     ECUData.MCTEMP_P0 = &MCTempRead0.data[0];
@@ -339,6 +337,8 @@ void initECUPointers() { // after all is declared set the appropriate pointers
     ECUData.MCFAULT_P01 = &MCFaults0.buf[5];
     ECUData.MCFAULT_P10 = &MCFaults1.buf[4];
     ECUData.MCFAULT_P11 = &MCFaults1.buf[5];
+    // Faults
+    ECUData.T2TFlags = &T2TData.buf[7];
 }
 
 // TODO: calculate average speed
@@ -381,9 +381,9 @@ bool pruneFaults() { // figure which bits go where
     final |= *ECUData.MCFAULT_P01 | *ECUData.MCFAULT_P11;
     final = final >> 3; // remove "reserved" bits
     final = final << 1; // for IMD fault
-    final |= 1;         // imd fault 1:0
+    final |= *ECUData.T2TFlags;         // imd fault 1:0 // BROKEN: not pointing to individual bit yet
     final = final << 1; // for BMS fault
-    final |= 1;         // bms fault 1:0
+    final |= *ECUData.T2TFlags;         // bms fault 1:0
     T2AMsg[10] = final;
     return false;
 }
@@ -393,12 +393,14 @@ TTMsg ReadTTMessages[]{
     MCVolt0,
     MCVolt1,
     bmsStat,
+    T2TData,
 };
 
 TTMsg WriteTTMessages[]{
     WriteSpeed,
     MCReset0,
     MCReset1,
+    T2TData,
 };
 
 /* 
