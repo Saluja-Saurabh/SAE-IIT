@@ -9,7 +9,7 @@ struct TTMsg;
 typedef uint32_t uint32;          // clean it up a lil
 typedef bool (*msgHandle)(TTMsg); // for message specialization such as a message block with only flags
 typedef void (*flagReader)(bool); // functions that are called when flag bits are true
-
+ 
 // TODO: decide on addresses for all the sensors and bms
 enum CanADR : uint32 {
     // motor
@@ -182,9 +182,6 @@ bool PEDAL_ERROR = false;
 bool CAR_MODE = false; // true: RaceMode false: EcoMode
 const byte Teensy2SerialArrSize = 12;
 int Teensy2SerialArr[Teensy2SerialArrSize];
-int Send2SerialADD = {
-
-};
 
 // Flag Handles
 void initalizeCar(bool bit) {
@@ -212,34 +209,35 @@ void setCarMode(bool bit) {
 }
 
 //handles
-void Fan() { 
+void Fan() {
   23/A9 - FAN1_PWM //fan pins
   22/A8 - FAN2_PWM
   21/A7 - FAN3_PWM
   20/A6 - FAN4_PWM
 
   8 - SIG_SERVO1_PWM //motor pins
-  27 - SIG_SERVO2_PWM 
+  27 - SIG_SERVO2_PWM
 
-  24 - SIG_FANS_ON/OFF //didn't know if you need this in the fan function. 
+  24 - SIG_FANS_ON/OFF //didn't know if you need this in the fan function.
   A21/DAC0 - SIG_PUMP_ANALOG
-  
+
       int FanSpeed;
       int MotorSpeed;
       int AvgMotorSpeed //whatever the average motor speed is
-      
+
       pinMode(fan, OUTPUT);
       pinMode(motorPin, INPUT);
-  
-      if( AvgMotorSpeed < //some number close to zero ){  
+
+      if( AvgMotorSpeed <0 ) {//some number close to zero
         FanSpeed = 0;
     }
-    else( AvgMotorSpeed > //some number close to zero){
+    else( AvgMotorSpeed > 0){//some number close to zero
         FanSpeed = //whatever Fan Speed .
         analogWrite(fan, FanSpeed); //actually spins fan at the FanSpeed.
       }
-  
+
     }
+
 bool MCResetFunc(TTMsg msg) { // MC Fault reseter thing
     msg.ext = 0;
     msg.len = 8;
@@ -336,7 +334,7 @@ bool pruneFaults(TTMsg msg) { // figure which bits go where
     final |= 1;         // imd fault 1:0
     final = final << 1; // for BMS fault
     final |= 1;         // bms fault 1:0
-    T2AMsg
+    T2AMsg[10] = final;
 }
 
 // load messages as read or write
