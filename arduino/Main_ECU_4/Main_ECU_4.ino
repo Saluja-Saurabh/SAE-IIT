@@ -118,7 +118,7 @@ enum validData : byte {
     PWM_servo1 = 8,
     PWM_servo2 = 27, // BROKEN: pin 27 is not PWM?
     //      button      //
-    sig_startButton = 2,
+    // sig_startButton = 2, // redefine
     sig_32v = 0,     // ON/OFF
     sig_charger = 5, // ON/OFF
     //      special     //
@@ -285,11 +285,11 @@ bool prechargeFunc(TTMsg msg) {
     return false;
 }
 
-void setIMDLight(bool pin){
+void setIMDLight(bool pin) {
     digitalWriteFast(sig_IMDSetLight, pin);
 }
 
-void setBMSLight(bool pin){
+void setBMSLight(bool pin) {
     digitalWriteFast(sig_AMSSetLight, pin);
 }
 
@@ -379,11 +379,11 @@ bool pruneFaults() { // figure which bits go where
     final = *ECUData.MCFAULT_P00 | *ECUData.MCFAULT_P10; // or faults to check both
     final = final << 8;
     final |= *ECUData.MCFAULT_P01 | *ECUData.MCFAULT_P11;
-    final = final >> 3; // remove "reserved" bits
-    final = final << 1; // for IMD fault
-    final |= *ECUData.T2TFlags;         // imd fault 1:0 // BROKEN: not pointing to individual bit yet
-    final = final << 1; // for BMS fault
-    final |= *ECUData.T2TFlags;         // bms fault 1:0
+    final = final >> 3;         // remove "reserved" bits
+    final = final << 1;         // for IMD fault
+    final |= *ECUData.T2TFlags; // imd fault 1:0 // BROKEN: not pointing to individual bit yet
+    final = final << 1;         // for BMS fault
+    final |= *ECUData.T2TFlags; // bms fault 1:0
     T2AMsg[10] = final;
     return false;
 }
