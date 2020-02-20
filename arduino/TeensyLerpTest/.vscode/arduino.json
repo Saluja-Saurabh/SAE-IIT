@@ -1,7 +1,7 @@
 {
-    "port": "COM8",
-    "board": "arduino:avr:teensy40",
+    "port": "COM13",
+    "board": "arduino:avr:teensy36",
     "sketch": "TeensyLerpTest.ino",
-    "configuration": "usb=serial,opt=o2std,keys=en-us",
+    "configuration": "usb=serial,speed=180,opt=o2std,keys=en-us",
     "output": "build"
 }

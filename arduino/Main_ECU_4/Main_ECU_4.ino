@@ -9,7 +9,7 @@ struct TTMsg;
 typedef uint32_t uint32;          // clean it up a lil
 typedef bool (*msgHandle)(TTMsg); // for message specialization such as a message block with only flags
 typedef void (*flagReader)(bool); // functions that are called when flag bits are true
- 
+
 // TODO: decide on addresses for all the sensors and bms
 enum CanADR : uint32 {
     // motor
@@ -92,14 +92,11 @@ enum validData : byte {
 
     // Both Teensy's
     boardLed = 13,
-    lightsIMDPin = 18,
 
     // Teensy One    0x400-0x405
     // Send
     // button
     startButton = 14,
-    IMDReadLight = 99,
-    AMSReadLight = 99,
     // range
     steeringPin = 15,
     brakepressurePin = 16,
@@ -107,7 +104,6 @@ enum validData : byte {
     accelerator_2 = 21, // for double checking
                         // Receive
                         // buttons
-    lightsBMSPin = 18,
 
     // Teensy Two       0x406-0x40A
     // Send
@@ -210,33 +206,37 @@ void setCarMode(bool bit) {
 
 //handles
 void Fan() {
-  23/A9 - FAN1_PWM //fan pins
-  22/A8 - FAN2_PWM
-  21/A7 - FAN3_PWM
-  20/A6 - FAN4_PWM
+    23 / A9 - FAN1_PWM //fan pins
+                  22 /
+                  A8 -
+        FAN2_PWM 21 / A7 - FAN3_PWM 20 / A6 - FAN4_PWM
 
-  8 - SIG_SERVO1_PWM //motor pins
-  27 - SIG_SERVO2_PWM
+        8 -
+        SIG_SERVO1_PWM //motor pins
+        27 -
+        SIG_SERVO2_PWM
 
-  24 - SIG_FANS_ON/OFF //didn't know if you need this in the fan function.
-  A21/DAC0 - SIG_PUMP_ANALOG
+        24 -
+        SIG_FANS_ON / OFF //didn't know if you need this in the fan function.
+                          A21 /
+            DAC0 -
+        SIG_PUMP_ANALOG
 
-      int FanSpeed;
-      int MotorSpeed;
-      int AvgMotorSpeed //whatever the average motor speed is
+        int FanSpeed;
+    int MotorSpeed;
+    int AvgMotorSpeed //whatever the average motor speed is
 
-      pinMode(fan, OUTPUT);
-      pinMode(motorPin, INPUT);
+        pinMode(fan, OUTPUT);
+    pinMode(motorPin, INPUT);
 
-      if( AvgMotorSpeed <0 ) {//some number close to zero
+    if (AvgMotorSpeed < 0) { //some number close to zero
         FanSpeed = 0;
-    }
-    else( AvgMotorSpeed > 0){//some number close to zero
-        FanSpeed = //whatever Fan Speed .
-        analogWrite(fan, FanSpeed); //actually spins fan at the FanSpeed.
-      }
-
-    }
+    } else
+        (AvgMotorSpeed > 0) {               //some number close to zero
+            FanSpeed =                      //whatever Fan Speed .
+                analogWrite(fan, FanSpeed); //actually spins fan at the FanSpeed.
+        }
+}
 
 bool MCResetFunc(TTMsg msg) { // MC Fault reseter thing
     msg.ext = 0;
@@ -283,7 +283,7 @@ TTMsg precharge = TTMsg(VOLTAGE_ADD - MOTOR_STATIC_OFFSET, prechargeFunc);
 TTMsg bmsStat = TTMsg(BMS_STATS_ADD, {BMSTemp, BMSVolt, BMSSOC});
 TTMsg motorL = TTMsg(MOTORL_ADD, {MotorLTemp});
 TTMsg motorR = TTMsg(MOTORR_ADD, {MotorRTemp});
-TTMsg T2TData = TTMsg(T2T_ADD, {avgAccel, breakPress, steeringAng}, {NULL, NULL, NULL, initalizeCar, NULL}, {IMDReadLight, AMSReadLight, carMode, startButton, pedalAir});
+TTMsg T2TData = TTMsg(T2T_ADD, {avgAccel, breakPress, steeringAng}, {NULL, initalizeCar, NULL}, {carMode, startButton, pedalAir});
 TTMsg T2T2Data = TTMsg(T2T2_ADD, {rpmLWheel, rpmRWheel});
 
 // anything that says MC, motor controller, needs to be doubled
@@ -317,7 +317,7 @@ void pushT2A() { // final push to tablet | arraysize: Teensy2SerialArrSize array
     T2AMsg[7] = 0; // aero
     T2AMsg[8] = *ECUData.BMSSOC_P;
     T2AMsg[9] = *ECUData.BMSBUSCURRENT_P;
-    // T2AMsg[10] = buildFaultList(); //gets updated by fault handler
+    // T2AMsg[10] = buildFaultList(); //gets updated by prune
     for (int i; i < 11; i++) {
         s += T2AMsg[i] + " ";
     }
@@ -329,11 +329,6 @@ bool pruneFaults(TTMsg msg) { // figure which bits go where
     final = msg.buf[4];
     final = final << 8;
     final |= msg.buf[5];
-    final = final >> 3; // remove "reserved" bits
-    final = final << 1; // for IMD fault
-    final |= 1;         // imd fault 1:0
-    final = final << 1; // for BMS fault
-    final |= 1;         // bms fault 1:0
     T2AMsg[10] = final;
 }
 
