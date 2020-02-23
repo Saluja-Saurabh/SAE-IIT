@@ -93,18 +93,22 @@ enum validData : byte {
 
     // Both Teensy's // to keep it consistant duplicate entires will be made for other pins
     boardLed = 13,
+    lightsIMDPin = 18,
 
     /*
             Teensy One      Address: 0x400 - 0x405
     */
     //      button      //
     sig_startButton = 2,
+    IMDReadLight = 99,
+    AMSReadLight = 99,
     //      range       //
     sig_Wheel2 = 21,
     sig_Wheel1 = 20,
     sig_accel2 = 18,
     sig_accel1 = 16,
     sig_brakePress = 14,
+    lightsBMSPin = 18,
 
     /*
             Teensy Two      Address: 0x406 - 0x40A
@@ -113,8 +117,7 @@ enum validData : byte {
     PWM_servo1 = 8,
     PWM_servo2 = 27, // BROKEN: pin 27 is not PWM?
     //      button      //
-    // sig_startButton = 2, // redefine
-    sig_32v = 0,     // ON/OFF
+    sig_32v = 0,     // ON/OFF // WHAT?
     sig_charger = 5, // ON/OFF
     //      special     //
     sig_precharge = 9,
@@ -122,15 +125,13 @@ enum validData : byte {
     sig_brakeLight = 7,
     sig_fans = 24, // ON/OFF
     sig_shutdownState = 25,
-    sig_MC = 26, // ON/OFF
+    sig_MC = 26, // ON/OFF // WHAT?
     PWM_Fan1 = 23,
     PWM_Fan2 = 22,
     PWM_Fan3 = 21,
     PWM_Fan4 = 20,
-    ANL_pump = 21, // analog only!
-
-    //      unknown      //
-    sig_buzzer = 6,
+    ANL_pump = 21,  // analog only!
+    sig_buzzer = 6, //  ON/OFF
 };
 
 /*
@@ -220,14 +221,32 @@ bool DO_PRECHARGE = true;           // Precharge latching variable
 bool START_BUTTON_PUSHED = false;   // MC enable bit state
 bool PEDAL_ERROR = false;
 bool CAR_MODE = false; // true: RaceMode false: EcoMode
+bool FAULT = false;    // ams, bms mc faults and DOPRECHARGE == 1 from precharge circuit
 const byte Teensy2SerialArrSize = 12;
 int Teensy2SerialArr[Teensy2SerialArrSize];
+
+void checkFaults() {
+}
 
 // Flag Handles
 void initalizeCar(bool bit) {
     START_BUTTON_PUSHED = true;
     Serial.println("MOTORS UNLOCKED");
 }
+
+/* Buzzer 
+ * pre charge func
+ * 
+ * START:
+ * StartButtonPushed false
+ * Push button
+ * Switch on the buzzer for 3 secs
+ * StartButtonPushed true
+ * 
+ * if fault goto START
+ * */
+
+// faults to check
 
 void setPedalState(bool bit) {
     PEDAL_ERROR = bit;
@@ -289,24 +308,27 @@ bool MCResetFunc(TTMsg msg) { // MC Fault reseter thing
     return true;
 } // IMPROVE: There may be reliability issues with only sending one?
 
+bool START_BUTTON_READY = false;
+
 bool prechargeFunc(TTMsg msg) {
-    if (digitalRead(sig_shutdownState)) { // if airs have no power, then precharge must be checked
-        DO_PRECHARGE = 1;
+    if (digitalReadFast(sig_shutdownState)) { // if airs have no power, then precharge must be checked
+        DO_PRECHARGE = 1;                     // its basiaclly a fault
         START_BUTTON_PUSHED = false;
     }
     // MC average?
     float MC_voltage = max(abs(decodeLilEdian(*ECUData.MCVOLT_P01, *ECUData.MCVOLT_P02)), abs(decodeLilEdian(*ECUData.MCVOLT_P11, *ECUData.MCVOLT_P12))) / 10; //Returns in power of 10s
-    if (!digitalRead(sig_shutdownState) && DO_PRECHARGE) {                                                                                                     //if airs have no power but had before, then begin precharge circuit
-        digitalWrite(sig_prechargeAir, LOW);                                                                                                                   //Keep air open
-        digitalWrite(sig_precharge, HIGH);                                                                                                                     //precharge is closed
+    if (!digitalReadFast(sig_shutdownState) && DO_PRECHARGE) {                                                                                                 //if airs have no power but had before, then begin precharge circuit
+        digitalWriteFast(sig_prechargeAir, LOW);                                                                                                               //Keep air open
+        digitalWriteFast(sig_precharge, HIGH);                                                                                                                 //precharge is closed
 
         if (*ECUData.BMSVolt_p >= 150 && (*ECUData.BMSVolt_p * 0.9) <= MC_voltage) { // BMS voltage is a global
             DO_PRECHARGE = 0;
+            START_BUTTON_READY = true;
         }
     } else { // Can use any MCs voltage, will be the same, must be greater than 270V (0.9 * 300V)
         // Should return to normal state
-        digitalWrite(sig_prechargeAir, HIGH); //close air
-        digitalWrite(sig_precharge, LOW);     //precharge is off
+        digitalWriteFast(sig_prechargeAir, HIGH); //close air
+        digitalWriteFast(sig_precharge, LOW);     //precharge is off
     }
     return false;
 }
@@ -329,7 +351,7 @@ struct TTMsg MCVolt1 = TTMsg(MCVolt0, MCOFFSET);
 struct TTMsg bmsStat = TTMsg(BMS_STATS_ADD, {BMSTemp, BMSVolt, BMSSOC});
 struct TTMsg motorL = TTMsg(MOTORL_ADD, {MotorLTemp});
 struct TTMsg motorR = TTMsg(MOTORR_ADD, {MotorRTemp});
-struct TTMsg T2TData = TTMsg(T2T_ADD, {avgAccel, sig_brakePress, steeringAng}, {NULL, initalizeCar, NULL}, {carMode, sig_startButton, pedalAir});
+struct TTMsg T2TData = TTMsg(T2T_ADD, {avgAccel, sig_brakePress, steeringAng}, {NULL, NULL, NULL, initalizeCar, NULL}, {IMDReadLight, AMSReadLight, carMode, sig_startButton, pedalAir});
 struct TTMsg T2T2Data = TTMsg(T2T2_ADD, {rpmLWheel, rpmRWheel});
 
 void initECUPointers() { // after all is declared set the appropriate pointers
@@ -386,7 +408,7 @@ void pushT2A() { // final push to tablet | arraysize: Teensy2SerialArrSize array
     T2AMsg[8] = *ECUData.BMSSOC_P;
     T2AMsg[9] = *ECUData.BMSBUSCURRENT_P;
     pruneFaults();
-    // T2AMsg[10] = buildFaultList(); //gets updated by pruner
+    // T2AMsg[10] = buildFaultList(); //gets updated by fault handler
     for (int i; i < 11; i++) {
         s += T2AMsg[i] + " ";
     }
@@ -401,6 +423,19 @@ bool pruneFaults() { // figure which bits go where
     final |= *ECUData.MCFAULT_P01 | *ECUData.MCFAULT_P11;
     T2AMsg[10] = final;
     return false;
+}
+
+void chargerSet() { // Run in loop
+    bool chargerState = digitalReadFast(sig_shutdownState);
+    digitalWriteFast(sig_charger, chargerState);
+}
+
+void setPump(int voltage = 0) { // Run in loop
+    analogWriteDAC0(voltage);   // Test values on ocilli and check if it works
+}
+
+void brakeLights() { // Run in loop
+    digitalWriteFast(sig_brakeLight, *ECUData.T2TBRAKE_P > 50);
 }
 
 // load messages as read or write
@@ -481,7 +516,7 @@ void setup() {
     }
     initECUPointers();
     pinMode(2, OUTPUT); // Fusion Tech's Dual CAN-Bus R pin switch
-    digitalWrite(2, LOW);
+    digitalWriteFast(2, LOW);
     Can1.setBaudRate(500000); // Speeed
     Can1.enableFIFO();        // FirstInFirstOut
     LEDBlink();
