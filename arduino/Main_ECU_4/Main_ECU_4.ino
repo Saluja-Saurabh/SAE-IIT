@@ -521,7 +521,6 @@ void setup() {
     Can1.enableFIFO();        // FirstInFirstOut
     LEDBlink();
     digitalWriteFast(boardLed, LOW);
-    pushT2A(); // Teensy to andriod
 }
 
 CAN_message_t dataIn; // Can data in obj
@@ -529,10 +528,10 @@ void loop() {
     if (Can1.read(dataIn)) {
         teensyRead(dataIn);
     }
-
     for (TTMsg msg : WriteTTMessages) { // Iterate through defined TTMsgs and push their data
         updateData(msg);
     }
+    pushT2A(); // Teensy to andriod
 }
 
 void accelCheck() { // read accel numbrs and sync with T2T line

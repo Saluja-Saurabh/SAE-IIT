@@ -1,5 +1,5 @@
 {
-    "port": "COM13",
+    "port": "COM18",
     "board": "arduino:avr:teensy36",
     "sketch": "TestRigFront_v1.ino",
     "configuration": "usb=serial,speed=180,opt=o2std,keys=en-us",
