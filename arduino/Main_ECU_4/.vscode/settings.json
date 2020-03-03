@@ -42,6 +42,7 @@
         "xstddef": "cpp",
         "xstring": "cpp",
         "xutility": "cpp",
-        "*.rh": "cpp"
+        "*.rh": "cpp",
+        "concepts": "cpp"
     }
 }

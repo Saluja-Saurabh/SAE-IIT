@@ -138,28 +138,37 @@ enum validData : byte {
     FLAG pos    | F1| F0|                         // Flag bytes if they exist NOTE: only byte 0 will call functions
     FLAG bits   |--F1--|0|1|3|4|5|6|7|--F0--|0|1|2|3|4|5|6|7| // how the flags are stored
 */
+static int *tempTbl[2];
+
+void swapDbl(int *tblA[2], int *tblB[2]) {
+    memcpy(tempTbl, tblA, 8);
+    memcpy(tblA, tblB, 8);
+    memcpy(tblB, tempTbl, 8);
+}
 
 // TODO: actually initalize TTMsg and CAN_message_t values in constructor instead of depending on just the default values!
 class TTMsg : public CAN_message_t { // Teensy to Teensy message definition/structure
 private:
-    validData *memo[4] = {0};
-    validData *memoize(validData lookup); // return pointer to element if exists and remember for future if set
+    // Memoization? sort of?
+    int *lookTbl[12][2];
+    int *memo[4];
+    int *memoize(validData lookup); // return pointer to element if exists and remember for future if set
 
 public:
-    validData *packets;    // data that have data in this message; position in table sets where PKT goes (see ^) // points to table of 4
-    uint32 offset = 0;     // now any data can have an offset for duplicates
-    flagReader *flagFuncs; // functions that are called when a flag bit is true | limits callbacks to flag byte 0 // points to table of 8
-    validData *flagValues; // sensor pins to read and push onto the flag byte | only flag byte 0 // points to table of 8
-    msgHandle handle = 0;  // function that can handle the message instead | for specialization of messages
-    bool containsFlag = 0; // used for memoization
-    int data[4] = {0};     // store decoded or pin data for later use
+    validData packets[4] = {NIL};    // data that have data in this message; position in table sets where PKT goes (see ^) // points to table of 4
+    uint32 offset = 0;               // now any data can have an offset for duplicates
+    flagReader flagFuncs[8] = {0};   // functions that are called when a flag bit is true | limits callbacks to flag byte 0 // points to table of 8
+    validData flagValues[8] = {NIL}; // sensor pins to read and push onto the flag byte | only flag byte 0 // points to table of 8
+    msgHandle handle = 0;            // function that can handle the message instead | for specialization of messages
+    bool containsFlag = 0;           // used for memoization
+    int data[4] = {0};               // store decoded or pin data for later use
     TTMsg(uint32 i, uint32 off = 0);
     TTMsg(uint32 i, msgHandle h, uint32 off = 0);
     TTMsg(uint32 i, const validData (&p)[4], uint32 off = 0);
     TTMsg(uint32 i, const validData (&p)[4], const flagReader (&fF)[8], const validData (&fV)[8], uint32 off = 0);
     TTMsg(TTMsg msg, uint32 off);
     TTMsg(uint32 i, validData p[4], flagReader fF[8], validData fV[8], msgHandle h, uint32 off = 0);
-    int getDataValue(validData lookup);
+    int getData(validData lookup);
 
 }; // IMPROVE: Flags can be extended to handle two bytes if it is really neccessary
 
