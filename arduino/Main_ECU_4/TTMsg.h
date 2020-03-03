@@ -142,6 +142,10 @@ enum validData : byte {
 // TODO: actually initalize TTMsg and CAN_message_t values in constructor instead of depending on just the default values!
 class TTMsg : public CAN_message_t { // Teensy to Teensy message definition/structure
 private:
+    validData *memo[4] = {0};
+    validData *memoize(validData lookup); // return pointer to element if exists and remember for future if set
+
+public:
     validData *packets;    // data that have data in this message; position in table sets where PKT goes (see ^) // points to table of 4
     uint32 offset = 0;     // now any data can have an offset for duplicates
     flagReader *flagFuncs; // functions that are called when a flag bit is true | limits callbacks to flag byte 0 // points to table of 8
@@ -149,14 +153,13 @@ private:
     msgHandle handle = 0;  // function that can handle the message instead | for specialization of messages
     bool containsFlag = 0; // used for memoization
     int data[4] = {0};     // store decoded or pin data for later use
-
-public:
     TTMsg(uint32 i, uint32 off = 0);
     TTMsg(uint32 i, msgHandle h, uint32 off = 0);
     TTMsg(uint32 i, const validData (&p)[4], uint32 off = 0);
     TTMsg(uint32 i, const validData (&p)[4], const flagReader (&fF)[8], const validData (&fV)[8], uint32 off = 0);
     TTMsg(TTMsg msg, uint32 off);
     TTMsg(uint32 i, validData p[4], flagReader fF[8], validData fV[8], msgHandle h, uint32 off = 0);
+    int getDataValue(validData lookup);
 
 }; // IMPROVE: Flags can be extended to handle two bytes if it is really neccessary
 

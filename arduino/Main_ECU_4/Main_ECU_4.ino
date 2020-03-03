@@ -4,12 +4,27 @@
     Version 4
 */
 
+#include "ECU4.h"
 #include "TTMsg.h"
-#include <IFCT.h> // ImprovedFLexCanLibrary using only Can0
+
+/* Buzzer 
+ * pre charge func
+ * 
+ * START:
+ * StartButtonPushed false
+ * Push button
+ * Switch on the buzzer for 3 secs
+ * StartButtonPushed true
+ * 
+ * if fault goto START
+ * */
+
+// faults to check
 
 /* 
     ----- SRT ECU specific data -----  
                                         */
+
 struct ECUData {    //IMPROVE: find a better solution to this circular dependancy with data
     int *BMSVolt_p; // we must keep track of what is being stored where in the packet setup
     int *BMSTEMP_p;
@@ -39,12 +54,15 @@ struct ECUData {    //IMPROVE: find a better solution to this circular dependanc
 uint32 MOTOR_OFFSET = 0xe0;         // offset for motor ids // is this actually just for the MCs?
 uint32 MOTOR_STATIC_OFFSET = 0x0A0; // IMPROVE: auto set this global offset to addresses
 bool DO_PRECHARGE = true;           // Precharge latching variable
+bool START_BUTTON_READY = false;    // when to buzz
 bool START_BUTTON_PUSHED = false;   // MC enable bit state
 bool PEDAL_ERROR = false;
 bool CAR_MODE = false; // true: RaceMode false: EcoMode
 bool FAULT = false;    // ams, bms mc faults and DOPRECHARGE == 1 from precharge circuit
+CAN_message_t dataIn;  // Can data in obj
 const byte Teensy2SerialArrSize = 12;
 int Teensy2SerialArr[Teensy2SerialArrSize];
+int T2AMsg[11];
 
 void checkFaults() {
 }
@@ -55,64 +73,10 @@ void initalizeCar(bool bit) {
     Serial.println("MOTORS UNLOCKED");
 }
 
-/* Buzzer 
- * pre charge func
- * 
- * START:
- * StartButtonPushed false
- * Push button
- * Switch on the buzzer for 3 secs
- * StartButtonPushed true
- * 
- * if fault goto START
- * */
-
-// faults to check
-
+// handles
 void setPedalState(bool bit) {
     PEDAL_ERROR = bit;
 }
-
-// void setCarMode(bool bit) {
-//     // TODO: ensure car is not moving
-//     if (*ECUData.MCMotorAng < 5) { // rpm = motor controller rpm
-//         CAR_MODE = bit;
-//     }
-// }
-
-// handles
-// void Fan() {
-//     23 / A9 - FAN1_PWM //fan pins
-//                   22 /
-//                   A8 -
-//         FAN2_PWM 21 / A7 - FAN3_PWM 20 / A6 - FAN4_PWM
-
-//         8 -
-//         SIG_SERVO1_PWM //motor pins
-//         27 -
-//         SIG_SERVO2_PWM
-
-//         24 -
-//         SIG_FANS_ON / OFF //didn't know if you need this in the fan function.
-//                           A21 /
-//             DAC0 -
-//         SIG_PUMP_ANALOG
-
-//         int FanSpeed;
-//     int MotorSpeed;
-//     int AvgMotorSpeed //whatever the average motor speed is
-
-//         pinMode(fan, OUTPUT);
-//     pinMode(motorPin, INPUT);
-
-//     if (AvgMotorSpeed < 0) { //some number close to zero
-//         FanSpeed = 0;
-//     } else
-//         (AvgMotorSpeed > 0) {               //some number close to zero
-//             FanSpeed =                      //whatever Fan Speed .
-//                 analogWrite(fan, FanSpeed); //actually spins fan at the FanSpeed.
-//         }
-// }
 
 bool MCResetFunc(TTMsg msg) { // MC Fault reseter thing
     msg.ext = 0;
@@ -129,7 +93,12 @@ bool MCResetFunc(TTMsg msg) { // MC Fault reseter thing
     return true;
 } // IMPROVE: There may be reliability issues with only sending one?
 
-bool START_BUTTON_READY = false;
+void setCarMode(bool bit) {
+    // TODO: ensure car is not moving
+    if (*ECUData.MCMotorAng0 < 5) { // rpm = motor controller rpm only for first MC
+        CAR_MODE = bit;
+    }
+}
 
 bool prechargeFunc(TTMsg msg) {
     if (digitalReadFast(sig_shutdownState)) { // if airs have no power, then precharge must be checked
@@ -206,15 +175,6 @@ void initECUPointers() { // after all is declared set the appropriate pointers
 
 // TODO: calculate average speed
 // TODO: Active aero
-
-void setCarMode(bool bit) {
-    // TODO: ensure car is not moving
-    if (*ECUData.MCMotorAng0 < 5) { // rpm = motor controller rpm only for first MC
-        CAR_MODE = bit;
-    }
-}
-
-int T2AMsg[11];
 
 void pushT2A() { // final push to tablet | arraysize: Teensy2SerialArrSize array: Teensy2SerialArr
     String s = "S ";
@@ -294,24 +254,6 @@ TTMsg offsetMsg(TTMsg msg) { // duplicates message blocks; allows the offset blo
     return dup;
 }
 
-// Led blinkery stuff
-bool loopSwitch = false;
-void toggleLED() {
-    digitalWriteFast(boardLed, loopSwitch);
-    loopSwitch = !loopSwitch;
-}
-
-void LEDBlink() { // how does the teensy check for start button when it should be off when pressed???
-    // Should Blink Twice per call
-    toggleLED();
-    delay(250);
-    toggleLED();
-    delay(125);
-    toggleLED();
-    delay(250);
-    toggleLED();
-    delay(125);
-}
 // are fault messages all just flags?
 // TODO: when a fault is detected read serial
 
@@ -344,7 +286,6 @@ void setup() {
     digitalWriteFast(boardLed, LOW);
 }
 
-CAN_message_t dataIn; // Can data in obj
 void loop() {
     if (Can1.read(dataIn)) {
         teensyRead(dataIn);

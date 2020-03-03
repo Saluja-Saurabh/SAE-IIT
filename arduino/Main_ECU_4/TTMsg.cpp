@@ -44,3 +44,17 @@ TTMsg::TTMsg(uint32 i, validData p[4], flagReader fF[8], validData fV[8], msgHan
     handle = h;
     offset = off;
 }
+validData *TTMsg::memoize(validData lookup) {
+    for (uint8_t i = 0; i < 4; i++) {
+        if (memo) {
+        }
+    }
+}
+int TTMsg::getDataValue(validData lookup) {
+    int found = memoize(lookup);
+    if (found) {
+        return found;
+    }
+
+    return 0;
+}
