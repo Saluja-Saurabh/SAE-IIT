@@ -28,37 +28,37 @@ void analogWriteVolt(uint8_t pin, double volt) {
 }
 
 void setup() {
-    // analogWriteResolution(12);
+    analogWriteResolution(12);
     pinMode(boardLed, OUTPUT);
-    // pinMode(5, OUTPUT);
-    // pinMode(6, OUTPUT);
-    // pinMode(7, OUTPUT);
-    // pinMode(8, OUTPUT);
-    // pinMode(27, OUTPUT);
-    // pinMode(9, OUTPUT);
-    // pinMode(10, OUTPUT);
-    // pinMode(0, OUTPUT);
-    // pinMode(23, OUTPUT);
-    // pinMode(22, OUTPUT);
-    // pinMode(21, OUTPUT);
-    // pinMode(20, OUTPUT);
-    // pinMode(25, INPUT);
-    // pinMode(19, INPUT);
-    // pinMode(18, INPUT);
+    pinMode(5, OUTPUT);
+    pinMode(6, OUTPUT);
+    pinMode(7, OUTPUT);
+    pinMode(8, OUTPUT);
+    pinMode(27, OUTPUT);
+    pinMode(9, OUTPUT);
+    pinMode(10, OUTPUT);
+    pinMode(0, OUTPUT);
+    pinMode(23, OUTPUT);
+    pinMode(22, OUTPUT);
+    pinMode(21, OUTPUT);
+    pinMode(20, OUTPUT);
+    pinMode(25, INPUT);
+    pinMode(19, INPUT);
+    pinMode(18, INPUT);
 
-    // analogWriteVolt(5, 3.3);
-    // analogWriteVolt(6, 3.3);
-    // analogWriteVolt(7, 3.3);
-    // analogWriteVolt(8, 3.3);
-    // analogWriteVolt(27, 3.3);
-    // analogWriteVolt(9, 3.3);
-    // analogWriteVolt(10, 3.3);
-    // analogWriteVolt(0, 3.3);
-    // analogWriteVolt(23, 3.3);
-    // analogWriteVolt(22, 3.3);
-    // analogWriteVolt(21, 3.3);
-    // analogWriteVolt(20, 3.3);
-    // analogWriteVolt(A21, 3.3); // pump not on digital pin
+    analogWriteVolt(5, 3.3);
+    analogWriteVolt(6, 3.3);
+    analogWriteVolt(7, 3.3);
+    analogWriteVolt(8, 3.3);
+    analogWriteVolt(27, 3.3);
+    analogWriteVolt(9, 3.3);
+    analogWriteVolt(10, 3.3);
+    analogWriteVolt(0, 3.3);
+    analogWriteVolt(23, 3.3);
+    analogWriteVolt(22, 3.3);
+    analogWriteVolt(21, 3.3);
+    analogWriteVolt(20, 3.3);
+    analogWriteVolt(A21, 3.3); // pump not on digital pin
 
     Serial.begin(9600);
     // delay(3000);
@@ -67,17 +67,17 @@ void setup() {
 
     Can1.setBaudRate(500000); // Speeed
     Can1.enableFIFO();        // FirstInFirstOut
-    // msg.id = random(0x69, 0x178);
-    // msg.ext = 0;
-    // msg.len = 8;
-    // msg.buf[0] = 69; // NM
-    // msg.buf[1] = 0;
-    // msg.buf[2] = 0; // Speed
-    // msg.buf[3] = 0;
-    // msg.buf[4] = 0; // Direction
-    // msg.buf[5] = 0; // Inverter enable byte
-    // msg.buf[6] = 0; // Last two are the maximum torque values || if 0 then defualt values are set
-    // msg.buf[7] = 21;
+    msg.id = 22;
+    msg.ext = 0;
+    msg.len = 8;
+    msg.buf[0] = 0;
+    msg.buf[1] = 0;
+    msg.buf[2] = 0;
+    msg.buf[3] = 0;
+    msg.buf[4] = 0;
+    msg.buf[5] = 0;
+    msg.buf[6] = 0;
+    msg.buf[7] = 69;
 }
 
 void printMsg(CAN_message_t msg) {
@@ -95,21 +95,19 @@ void printMsg(CAN_message_t msg) {
     for (uint8_t i = 0; i < msg.len; i++) {
         Serial.print(msg.buf[i], HEX);
         Serial.print(" ");
-    } 
+    }
     Serial.println();
 }
 
 void loop() {
 
     if (Can1.read(dataIn)) {
-        // Serial.print(dataIn.buf[0]);
-        // Serial.print(",");
+        toggleLED();
+        printMsg(dataIn);
         // Serial.print(dataIn.buf[7]);
         // Serial.print(",");
-        // Serial.println();
-        printMsg(dataIn);
     }
-    // Can1.write(msg);
+    Can1.write(msg);
 
     // analogWrite(21, 500);
     // Serial.print(digitalRead(25));

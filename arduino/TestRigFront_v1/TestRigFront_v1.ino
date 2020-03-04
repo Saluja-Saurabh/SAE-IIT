@@ -24,18 +24,18 @@ CAN_message_t dataIn, msg; // Can data in obj
 
 void setup() {
     pinMode(boardLed, OUTPUT);
-    // pinMode(25, OUTPUT);
-    // pinMode(26, OUTPUT);
-    // pinMode(2, INPUT);
-    // pinMode(14, INPUT);
-    // pinMode(15, INPUT);
-    // pinMode(16, INPUT);
-    // pinMode(18, INPUT);
-    // pinMode(20, INPUT);
-    // pinMode(21, INPUT);
+    pinMode(25, OUTPUT);
+    pinMode(26, OUTPUT);
+    pinMode(2, INPUT);
+    pinMode(14, INPUT);
+    pinMode(15, INPUT);
+    pinMode(16, INPUT);
+    pinMode(18, INPUT);
+    pinMode(20, INPUT);
+    pinMode(21, INPUT);
 
-    // analogWrite(26, 512);
-    // analogWrite(25, 512);
+    analogWrite(26, 512);
+    analogWrite(25, 512);
 
     Serial.begin(9600);
     // delay(3000);
@@ -44,17 +44,17 @@ void setup() {
 
     Can1.setBaudRate(500000); // Speeed
     Can1.enableFIFO();        // FirstInFirstOut
-    msg.id = random(0x69, 0x178);
+    msg.id = 42;
     msg.ext = 0;
     msg.len = 8;
-    msg.buf[0] = 42; // NM
+    msg.buf[0] = 0;
     msg.buf[1] = 0;
-    msg.buf[2] = 0; // Speed
+    msg.buf[2] = 0;
     msg.buf[3] = 0;
-    msg.buf[4] = 0; // Direction
-    msg.buf[5] = 0; // Inverter enable byte
-    msg.buf[6] = 0; // Last two are the maximum torque values || if 0 then defualt values are set
-    msg.buf[7] = 192;
+    msg.buf[4] = 0;
+    msg.buf[5] = 0;
+    msg.buf[6] = 0;
+    msg.buf[7] = 3;
 }
 
 void printMsg(CAN_message_t msg) {
@@ -77,21 +77,14 @@ void printMsg(CAN_message_t msg) {
 }
 
 void loop() {
-    // if (Can1.read(dataIn)) {
-    //     Serial.print(dataIn.buf[0]);
-    //     Serial.print(",");
-    //     Serial.print(dataIn.buf[7]);
-    //     Serial.print(",");
-    // }
-    printMsg(msg);
-    // Serial.print(msg.buf[0]);
-    // Serial.print(",");
-    // Serial.print(msg.buf[7]);
-    // Serial.print(",");
-    // Serial.println();
+    if (Can1.read(dataIn)) {
+        toggleLED();
+        printMsg(dataIn);
+        //     // Serial.print(dataIn.buf[7]);
+        //     // Serial.print(",");
+    }
     Can1.write(msg);
 
-    // delay(8);                           // arduino ide is poopoo
     // Serial.print(digitalRead(2) * 512); // startbutton
     // Serial.print(",");
     // Serial.print(analogRead(14));
@@ -110,4 +103,5 @@ void loop() {
     // Serial.print(",");
     // Serial.print(0);
     // Serial.println();
+    // delay(8); // arduino ide is poopoo
 }
