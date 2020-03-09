@@ -33,27 +33,38 @@ TTMsg::TTMsg(uint32 i, validData p[4], flagReader fF[8], validData fV[8], msgHan
 void TTMsg::finalize() {
 }
 
-int *TTMsg::memoize(validData lookup) { // lookup if data is remembered and return
-
+int *TTMsg::memoize(validData lookup, bool &isFlag) { // lookup if data is remembered and return
+    for (uint8_t i = 0; i < 12; i++) {                // check all values including flags
+        if (memok[i] == lookup) {
+            if (i < 3) { // must be a full 4 byte value
+                return memov[i];
+            } else if (!containsFlag) { // again must be a full 4 byte value
+                return memov[3];
+            } else { // must be a flag value
+                isFlag = true;
+                return memov[3];
+            }
+        }
+    }
+    for (uint8_t i = 0; i < 3; i++) { // check first three bytes
+        if (lookTbl[i] == lookup) {
+            if (i < 3) { // must be a full 4 byte value
+                return *memo[i];
+            } else if (!containsFlag) { // again must be a full 4 byte value
+                return *memo[3];
+            } else {                                       // must be a flag value
+                return (*memo[3] & (2 ^ (i - 3))) ? 1 : 0; // if value is not 0 return 1
+            }
+        }
+    }
     return nullptr;
 }
 
 int TTMsg::getData(validData lookup) {
-    int *found = memoize(lookup);
+    bool isFlag; // for checking if it is flag or not ig
+    int *found = memoize(lookup, isFlag);
     if (found != nullptr) { // if something is found proceed
         return *found;      // return actual value
-    } else {
-        for (uint8_t i = 0; i < 12; i++) { // check all values including flags
-            if (lookTbl[i] == lookup) {
-                if (i < 3) { // must be a full 4 byte value
-                    return *memo[i];
-                } else if (!containsFlag) { // again must be a full 4 byte value
-                    return *memo[3];
-                } else {                                       // must be a flag value
-                    return (*memo[3] & (2 ^ (i - 3))) ? 1 : 0; // if value is not 0 return 1
-                }
-            }
-        }
     }
 
     return -42069; // l0lz
