@@ -1,5 +1,6 @@
 #ifndef TTMSG_H
 #define TTMSG_H
+#define MAXVALIDDATA 81 // highest value of a validData type
 
 #include <IFCT.h>                 // ImprovedFLexCanLibrary
 typedef uint32_t uint32;          // clean it up a lil
@@ -33,63 +34,64 @@ enum CanADR : uint32 {
     T2T2_ADD = 0xFFF,
 };
 
-// Used to identify what data goes into what message
-enum validData : byte {
-    NIL = 0, // Pin0 must be sacrificed to the gods to have a nil value
+// validData teensy pin outs are from 0-33
+// validData above 33 are arbitrary; used only for id
+enum validData : uint8_t { // Used to identify what data goes into what message
+    NIL = -1,              // Will this work?; will overflow but is known value
 
     // Motors
-    MotorLTemp = true,
-    MotorRTemp = true,
-    rpmLWheel = true, // Is this from MCs or motors themselves?
-    rpmRWheel = true,
+    MotorLTemp = 40,
+    MotorRTemp = 41,
+    rpmLWheel = 42, // Is this from MCs or motors themselves?
+    rpmRWheel = 43,
 
     // Motor controller
     // TEMP1
-    PhaseATemp = true,
-    PhaseBTemp = true,
-    PhaseCTemp = true,
-    DriverBoard = true,
+    PhaseATemp = 44,
+    PhaseBTemp = 45,
+    PhaseCTemp = 46,
+    DriverBoard = 47,
     // TEMP2
-    ControlBoard = true,
-    RTD1 = true,
-    RTD2 = true,
-    RTD3 = true,
+    ControlBoard = 48,
+    RTD1 = 49,
+    RTD2 = 50,
+    RTD3 = 51,
     // TEMP3
-    RTD4 = true,
-    RTD5 = true,
-    motor = true,
-    torqueShudder = true,
+    RTD4 = 52,
+    RTD5 = 53,
+    motor = 54,
+    torqueShudder = 55,
     //MOTORPOS
-    angle = true,
-    anglrVel = true,
-    electricalFreq = true,
-    deltaResolver = true, // Unused
+    angle = 56,
+    anglrVel = 57,
+    electricalFreq = 58,
+    deltaResolver = 59, // Unused
     //CURRENT
-    PhaseACur = true,
-    PhaseBCur = true,
-    PhaseCCur = true,
-    DCBusCur = true,
+    PhaseACur = 60,
+    PhaseBCur = 61,
+    PhaseCCur = 70,
+    DCBusCur = 71,
     //VOLTAGE
-    DCBusV = true,
-    OutputV = true,
-    VAB_Vd = true,
-    VBC_Vq = true,
+    DCBusV = 72,
+    OutputV = 73,
+    VAB_Vd = 74,
+    VBC_Vq = 75,
     //BMS
-    BMSVolt = true,
-    BMSTemp = true,
-    BMSSOC = true,
+    BMSVolt = 76,
+    BMSTemp = 77,
+    BMSSOC = 78,
 
     // accelerator
-    avgAccel = true, // Manually set
+    avgAccel = 79, // Manually set
 
     //T2T //TODO: Do these valid data belong here?
-    steeringAng = 99,
-    carMode = true,
-    pedalAir = true,
+    carMode = 79,
+    pedalAir = 80,
+    steeringAng = 81,
 
     // Both Teensy's // to keep it consistant duplicate entires will be made for other pins
     boardLed = 13,
-    lightsIMDPin = 18,
+    lights_IMD = 18,
 
     /*
             Teensy One      Address: 0x400 - 0x405
@@ -135,62 +137,19 @@ enum validData : byte {
     H&L 'packet'        | H | L |   =   |  PKT  | // L and H bytes must be next to each other, referred as packets(PKT)
     PKT pos     |  PKT  |  PKT  |  PKT  |  PKT  | // Valid PKT placement NOTE: is set as seprate H & L in actual buffer
     data        |   | S3|   | S2|   | S1|   | S0| // Where data funcs are called (based off pos in TTMsg table | Byte#/2)
-    FLAG pos    | F1| F0|                         // Flag bytes if they exist NOTE: only byte 0 will call functions
+    FLAG pos    | F1| F0|                         // Flag bytes if they exist NOTE: only byte 7 will call functions
     FLAG bits   |--F1--|0|1|3|4|5|6|7|--F0--|0|1|2|3|4|5|6|7| // how the flags are stored
 */
 
 // TODO: actually initalize TTMsg and CAN_message_t values in constructor instead of depending on just the default values!
-class TTMsg : public CAN_message_t { // Teensy to Teensy message definition/structure
-private:
-    // Memoization? sort of? // IMPROVE: rn memoization is just a bunch of for loops?
-    validData memok[12]; // memo key
-    int *memov[4]; // memo val
-    int *memoize(validData lookup, bool &isFlag); // return pointer to element if exists and remember for future if set
-
-public:
-    validData packets[4] = {NIL};    // data that have data in this message; position in table sets where PKT goes (see ^) // points to table of 4
-    uint32 offset = 0;               // now any data can have an offset for duplicates
-    flagReader flagFuncs[8] = {0};   // functions that are called when a flag bit is true | limits callbacks to flag byte 0 // points to table of 8
-    validData flagValues[8] = {NIL}; // sensor pins to read and push onto the flag byte | only flag byte 0 // points to table of 8
-    msgHandle handle = 0;            // function that can handle the message instead | for specialization of messages
-    bool containsFlag = 0;           // used for memoization
-    int data[4] = {0};               // store decoded or pin data for later use
-    TTMsg(uint32 i, uint32 off = 0);
-    TTMsg(uint32 i, msgHandle h, uint32 off = 0);
-    TTMsg(uint32 i, const validData (&p)[4], uint32 off = 0);
-    TTMsg(uint32 i, const validData (&p)[4], const flagReader (&fF)[8], const validData (&fV)[8], uint32 off = 0);
-    TTMsg(TTMsg msg, uint32 off);
-    TTMsg(uint32 i, validData p[4], flagReader fF[8], validData fV[8], msgHandle h, uint32 off = 0);
-    int getData(validData lookup);
-
-}; // IMPROVE: Flags can be extended to handle two bytes if it is really neccessary
+extern struct TTMsg : public CAN_message_t { // Teensy to Teensy message definition/structure
+    validData packets[4] = {NIL};            // data that have data in this message; position in table sets where PKT goes (see ^) // points to table of 4
+    uint32 offset = 0;                       // now any data can have an offset for duplicates
+    flagReader flagFuncs[8] = {0};           // functions that are called when a flag bit is true | limits callbacks to flag byte 0 // points to table of 8
+    validData flagValues[8] = {NIL};         // sensor pins to read and push onto the flag byte | only flag byte 0 // points to table of 8
+    msgHandle handle = 0;                    // function that can handle the message instead | for specialization of messages
+    bool containsFlag = 0;                   // used for memo
+    int16_t data[4] = {0};                   // store decoded or pin data for later use | NOTE: this value is synced with actual bytes that are read/written
+};                                           // IMPROVE: Flags can be extended to handle two bytes if it is really neccessary
 
 #endif
-
-// Example program of the variadic functions
-// #include <iostream>
-// #include <string>
-// using namespace std;
-
-// struct expand_type {
-//     template <typename... T>
-//     expand_type(T &&...) {}
-// };
-
-// void logr(int a){ // force type checking?
-//     cout << a;
-// }
-
-// template <typename... ArgTypes>
-// void print(ArgTypes... args) {
-//     expand_type{0, (logr(args),0)...};
-// }
-
-// int main()
-// {
-//   int ya = 4;
-//   int yab = 8;
-//   int yda = 5;
-//   int yga = 98;
-//   print(ya, yab, yda, yga);
-// }

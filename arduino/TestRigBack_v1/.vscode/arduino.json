@@ -1,5 +1,5 @@
 {
-    "port": "COM17",
+    "port": "COM16",
     "board": "arduino:avr:teensy36",
     "sketch": "TestRigBack_v1.ino",
     "configuration": "usb=serial,speed=180,opt=o2std,keys=en-us",

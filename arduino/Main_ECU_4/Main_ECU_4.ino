@@ -5,6 +5,7 @@
 */
 
 #include "ECU4.h"
+#include "MsgMaster.h"
 #include "TTMsg.h"
 
 /* Buzzer 
@@ -24,31 +25,6 @@
 /* 
     ----- SRT ECU specific data -----  
                                         */
-
-struct ECUData {    //IMPROVE: find a better solution to this circular dependancy with data
-    int *BMSVolt_p; // we must keep track of what is being stored where in the packet setup
-    int *BMSTEMP_p;
-    int *LMTEMP_P;
-    int *RMTEMP_P;
-    int *BMSSOC_P;        // state of charge
-    int *BMSBUSCURRENT_P; // bus current
-    int *T2TACCEL_P;      // avgAccel
-    int *T2TBRAKE_P;
-    //MCs
-    int *MCMotorAng0;
-    int *MCMotorAng1;
-    int *MCTEMP_P0;
-    int *MCTEMP_P1;
-    int *MCVOLT_P01;
-    int *MCVOLT_P02;
-    int *MCVOLT_P11;
-    int *MCVOLT_P12;
-    uint8_t *MCFAULT_P00;
-    uint8_t *MCFAULT_P01;
-    uint8_t *MCFAULT_P10;
-    uint8_t *MCFAULT_P11;
-    uint8_t *T2TFlags;
-} ECUData;
 
 // Globals!?
 uint32 MOTOR_OFFSET = 0xe0;         // offset for motor ids // is this actually just for the MCs?
@@ -95,7 +71,8 @@ bool MCResetFunc(TTMsg msg) { // MC Fault reseter thing
 
 void setCarMode(bool bit) {
     // TODO: ensure car is not moving
-    if (*ECUData.MCMotorAng0 < 5) { // rpm = motor controller rpm only for first MC
+    // if (*ECUData.MCMotorAng0 < 5) {
+    if (Master.getData(); < 5) { // rpm = motor controller rpm only for first MC
         CAR_MODE = bit;
     }
 }
@@ -125,53 +102,55 @@ bool prechargeFunc(TTMsg msg) {
 
 // Initalize messages
 //Both MCs
-struct TTMsg WriteSpeed = TTMsg(SPEEDWRITE_ADD, motorPushSpeed);
-//MCs //IMPROVE: better solution for both MCs instead of just 'hardcoding' both seperate
-struct TTMsg MCReset0 = TTMsg(RESETMC_ADD - MOTOR_STATIC_OFFSET, MCResetFunc);
-struct TTMsg MCReset1 = TTMsg(MCReset0, MCOFFSET);
-struct TTMsg MCTempRead0 = TTMsg(RESETMC_ADD - MOTOR_STATIC_OFFSET, MCResetFunc);
-struct TTMsg MCTempRead1 = TTMsg(MCTempRead0, MCOFFSET);
-struct TTMsg MCMotorPos0 = TTMsg(MOTORPOS_ADD - MOTOR_STATIC_OFFSET, {angle});
-struct TTMsg MCMotorPos1 = TTMsg(MCMotorPos0, MCOFFSET);
-struct TTMsg MCFaults0 = TTMsg(FAULT_ADD);
-struct TTMsg MCFaults1 = TTMsg(MCFaults0, MCOFFSET);
-struct TTMsg MCVolt0 = TTMsg(VOLTAGE_ADD - MOTOR_STATIC_OFFSET, prechargeFunc);
-struct TTMsg MCVolt1 = TTMsg(MCVolt0, MCOFFSET);
-// Others
-struct TTMsg bmsStat = TTMsg(BMS_STATS_ADD, {BMSTemp, BMSVolt, BMSSOC});
-struct TTMsg motorL = TTMsg(MOTORL_ADD, {MotorLTemp});
-struct TTMsg motorR = TTMsg(MOTORR_ADD, {MotorRTemp});
-struct TTMsg T2TData = TTMsg(T2T_ADD, {avgAccel, sig_brakePress, steeringAng}, {NULL, NULL, NULL, initalizeCar, NULL}, {IMDReadLight, AMSReadLight, carMode, sig_startButton, pedalAir});
-struct TTMsg T2T2Data = TTMsg(T2T2_ADD, {rpmLWheel, rpmRWheel});
+// struct TTMsg WriteSpeed = TTMsg(SPEEDWRITE_ADD, motorPushSpeed);
+// //MCs //IMPROVE: better solution for both MCs instead of just 'hardcoding' both seperate
+// struct TTMsg MCReset0 = TTMsg(RESETMC_ADD - MOTOR_STATIC_OFFSET, MCResetFunc);
+// struct TTMsg MCReset1 = TTMsg(MCReset0, MCOFFSET);
+// struct TTMsg MCTempRead0 = TTMsg(RESETMC_ADD - MOTOR_STATIC_OFFSET, MCResetFunc);
+// struct TTMsg MCTempRead1 = TTMsg(MCTempRead0, MCOFFSET);
+// struct TTMsg MCMotorPos0 = TTMsg(MOTORPOS_ADD - MOTOR_STATIC_OFFSET, {angle});
+// struct TTMsg MCMotorPos1 = TTMsg(MCMotorPos0, MCOFFSET);
+// struct TTMsg MCFaults0 = TTMsg(FAULT_ADD);
+// struct TTMsg MCFaults1 = TTMsg(MCFaults0, MCOFFSET);
+// struct TTMsg MCVolt0 = TTMsg(VOLTAGE_ADD - MOTOR_STATIC_OFFSET, prechargeFunc);
+// struct TTMsg MCVolt1 = TTMsg(MCVolt0, MCOFFSET);
+// // Others
+// struct TTMsg bmsStat = TTMsg(BMS_STATS_ADD, {BMSTemp, BMSVolt, BMSSOC});
+// struct TTMsg motorL = TTMsg(MOTORL_ADD, {MotorLTemp});
+// struct TTMsg motorR = TTMsg(MOTORR_ADD, {MotorRTemp});
+// struct TTMsg T2TData = TTMsg(T2T_ADD, {avgAccel, sig_brakePress, steeringAng}, {NULL, NULL, NULL, initalizeCar, NULL}, {IMDReadLight, AMSReadLight, carMode, sig_startButton, pedalAir});
+// struct TTMsg T2T2Data = TTMsg(T2T2_ADD, {rpmLWheel, rpmRWheel});
 
-void initECUPointers() { // after all is declared set the appropriate pointers
-    // anything that says MC, motor controller, needs to be doubled
-    // pointers to data that will be used within teensy itself | ex. BMS_VOLTAGE
-    ECUData.BMSVolt_p = &bmsStat.data[1]; // we must keep track of what is being stored where in the packet setup
-    ECUData.BMSTEMP_p = &bmsStat.data[0];
-    ECUData.LMTEMP_P = &motorL.data[0];
-    ECUData.RMTEMP_P = &motorR.data[0];
-    ECUData.BMSSOC_P = &bmsStat.data[2];        // state of charge
-    ECUData.BMSBUSCURRENT_P = &bmsStat.data[2]; // bus current
-    ECUData.T2TACCEL_P = &T2TData.data[0];      // avgAccel
-    ECUData.T2TBRAKE_P = &T2T2Data.data[1];     // break pressure
-    // MCs //IMPROVE: maybe put both MCs in individual sub tables?
-    ECUData.MCMotorAng0 = &MCMotorPos0.data[0];
-    ECUData.MCMotorAng1 = &MCMotorPos1.data[0];
-    ECUData.MCTEMP_P0 = &MCTempRead0.data[0];
-    ECUData.MCTEMP_P1 = &MCTempRead1.data[0];
-    ECUData.MCVOLT_P01 = &MCVolt0.data[0];
-    ECUData.MCVOLT_P02 = &MCVolt0.data[1];
-    ECUData.MCVOLT_P11 = &MCVolt1.data[0];
-    ECUData.MCVOLT_P12 = &MCVolt1.data[1];
-    ECUData.MCFAULT_P00 = &MCFaults0.buf[4];
-    ECUData.MCFAULT_P01 = &MCFaults0.buf[5];
-    ECUData.MCFAULT_P10 = &MCFaults1.buf[4];
-    ECUData.MCFAULT_P11 = &MCFaults1.buf[5];
-
-    // Faults
-    ECUData.T2TFlags = &T2TData.buf[7];
+void setMasterMessages() {
+    Master.newMsg(SPEEDWRITE_ADD, motorPushSpeed);
 }
+
+// initECUPointers // after all is declared set the appropriate pointers
+// anything that says MC, motor controller, needs to be doubled
+// pointers to data that will be used within teensy itself | ex. BMS_VOLTAGE
+// ECUData.BMSVolt_p = &bmsStat.data[1]; // we must keep track of what is being stored where in the packet setup
+// ECUData.BMSTEMP_p = &bmsStat.data[0];
+// ECUData.LMTEMP_P = &motorL.data[0];
+// ECUData.RMTEMP_P = &motorR.data[0];
+// ECUData.BMSSOC_P = &bmsStat.data[2];        // state of charge
+// ECUData.BMSBUSCURRENT_P = &bmsStat.data[2]; // bus current
+// ECUData.T2TACCEL_P = &T2TData.data[0];      // avgAccel
+// ECUData.T2TBRAKE_P = &T2T2Data.data[1];     // break pressure
+// // MCs //IMPROVE: maybe put both MCs in individual sub tables?
+// ECUData.MCMotorAng0 = &MCMotorPos0.data[0];
+// ECUData.MCMotorAng1 = &MCMotorPos1.data[0];
+// ECUData.MCTEMP_P0 = &MCTempRead0.data[0];
+// ECUData.MCTEMP_P1 = &MCTempRead1.data[0];
+// ECUData.MCVOLT_P01 = &MCVolt0.data[0];
+// ECUData.MCVOLT_P02 = &MCVolt0.data[1];
+// ECUData.MCVOLT_P11 = &MCVolt1.data[0];
+// ECUData.MCVOLT_P12 = &MCVolt1.data[1];
+// ECUData.MCFAULT_P00 = &MCFaults0.buf[4];
+// ECUData.MCFAULT_P01 = &MCFaults0.buf[5];
+// ECUData.MCFAULT_P10 = &MCFaults1.buf[4];
+// ECUData.MCFAULT_P11 = &MCFaults1.buf[5];
+// // Faults
+// ECUData.T2TFlags = &T2TData.buf[7];
 
 // TODO: calculate average speed
 // TODO: Active aero
@@ -333,9 +312,9 @@ void updateData(TTMsg msg) {
 }
 
 // IMPROVE: anyway to make this take advantage of the compiler?
-int decodeLilEdian(const byte low, const byte high) {
-    int value = 0;
-    int full_data = high * 255 + low;
+int16_t decodeLilEdian(const byte low, const byte high) {
+    int16_t value = 0;
+    int16_t full_data = high * 255 + low;
     if (high < 128) { // positive
         value = full_data;
     } else if (high > 128) { //neg
