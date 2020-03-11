@@ -263,38 +263,6 @@ void loop() {
 //     }
 // }
 
-// void updateData(TTMsg msg) {
-//     if (msg.handle && !(msg.handle)(msg)) { // if the handle exists and returns true upon calling continue execution
-//         return;
-//     }
-//     byte stop = 8;
-//     if (msg.containsFlag) { // Readflags if they are expected
-//         flagRead(msg);      // Check bytes
-//         stop = 6;           // Skip flag bytes
-//     }
-//     for (byte i = 0; i < stop; i += 2) {
-//         if (msg.packets[i / 2]) {                     // If we have a sensor for this packet read and store it
-//             int val = analogRead(msg.packets[i / 2]); // TODO: Some sensors are digital not just analog!
-//             msg.data[i / 2] = val;                    // store the raw value
-//             msg.buf[i] = val % 256;
-//             msg.buf[i + 1] = val / 256;
-//         }
-//     }
-//     writeTTMsg(msg);
-// }
-
-// void flagRead(TTMsg msg) {                                          // read pins that map to flag variables
-//     for (byte i = 7; i <= 6; i--) {                                 // capped to first two bytes
-//         msg.buf[i] = 0;                                             // clear flags
-//         for (byte bit = 0; bit < 8; ++bit) {                        // iterate through byte bits
-//             if (msg.flagValues[bit]) {                              // check if there is a flag defined
-//                 msg.buf[i] |= digitalReadFast(msg.flagValues[bit]); // store flag
-//             }                                                       //
-//             msg.buf[i] = msg.buf[i] << 1;                           // shift bits
-//         }
-//     }
-// }
-
 // // motor functions
 
 // TODO: test what the accelerators are outputting

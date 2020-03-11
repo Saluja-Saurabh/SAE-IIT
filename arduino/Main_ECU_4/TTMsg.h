@@ -4,6 +4,7 @@
 #define MSGREADS 8      // max of 8 messages
 #define MSGWRITES 8
 
+#include "Funcs.h"
 #include <IFCT.h>                 // ImprovedFLexCanLibrary
 typedef uint32_t uint32;          // clean it up a lil
 typedef bool (*msgHandle)(TTMsg); // for message specialization such as a message block with only flags
