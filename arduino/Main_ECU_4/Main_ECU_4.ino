@@ -44,30 +44,30 @@ int T2AMsg[11];
 // }
 
 // // Flag Handles
-// void initalizeCar(bool bit) {
-//     START_BUTTON_PUSHED = true;
-//     Serial.println("MOTORS UNLOCKED");
-// }
+void initalizeCar(bool bit) {
+    START_BUTTON_PUSHED = true;
+    Serial.println("MOTORS UNLOCKED");
+}
 
 // // handles
 // void setPedalState(bool bit) {
 //     PEDAL_ERROR = bit;
 // }
 
-// bool MCResetFunc(TTMsg msg) { // MC Fault reseter thing
-//     msg.ext = 0;
-//     msg.len = 8;
-//     msg.buf[0] = 20;
-//     msg.buf[1] = 0;
-//     msg.buf[2] = 1;
-//     msg.buf[3] = 0;
-//     msg.buf[4] = 0;
-//     msg.buf[5] = 0;
-//     msg.buf[6] = 0;
-//     msg.buf[7] = 0;
-//     writeTTMsg(msg);
-//     return true;
-// } // IMPROVE: There may be reliability issues with only sending one?
+bool MCResetFunc(TTMsg *msg) { // MC Fault reseter thing
+    msg->ext = 0;
+    msg->len = 8;
+    msg->buf[0] = 20;
+    msg->buf[1] = 0;
+    msg->buf[2] = 1;
+    msg->buf[3] = 0;
+    msg->buf[4] = 0;
+    msg->buf[5] = 0;
+    msg->buf[6] = 0;
+    msg->buf[7] = 0;
+    Messenger.writeMsg(msg);
+    return true;
+} // IMPROVE: There may be reliability issues with only sending one?
 
 // void setCarMode(bool bit) {
 //     // TODO: ensure car is not moving
@@ -77,33 +77,8 @@ int T2AMsg[11];
 //     }
 // }
 
-// bool prechargeFunc(TTMsg msg) {
-//     if (digitalReadFast(sig_shutdownState)) { // if airs have no power, then precharge must be checked
-//         DO_PRECHARGE = 1;                     // its basiaclly a fault
-//         START_BUTTON_PUSHED = false;
-//     }
-//     // MC average?
-//     float MC_voltage = max(abs(decodeLilEdian(*ECUData.MCVOLT_P01, *ECUData.MCVOLT_P02)), abs(decodeLilEdian(*ECUData.MCVOLT_P11, *ECUData.MCVOLT_P12))) / 10; //Returns in power of 10s
-//     if (!digitalReadFast(sig_shutdownState) && DO_PRECHARGE) {                                                                                                 //if airs have no power but had before, then begin precharge circuit
-//         digitalWriteFast(sig_prechargeAir, LOW);                                                                                                               //Keep air open
-//         digitalWriteFast(sig_precharge, HIGH);                                                                                                                 //precharge is closed
-
-//         if (*ECUData.BMSVolt_p >= 150 && (*ECUData.BMSVolt_p * 0.9) <= MC_voltage) { // BMS voltage is a global
-//             DO_PRECHARGE = 0;
-//             START_BUTTON_READY = true;
-//         }
-//     } else { // Can use any MCs voltage, will be the same, must be greater than 270V (0.9 * 300V)
-//         // Should return to normal state
-//         digitalWriteFast(sig_prechargeAir, HIGH); //close air
-//         digitalWriteFast(sig_precharge, LOW);     //precharge is off
-//     }
-//     return false;
-// }
-
-// Initalize messages
 //Both MCs
 // struct TTMsg WriteSpeed = TTMsg(SPEEDWRITE_ADD, motorPushSpeed);
-// //MCs //IMPROVE: better solution for both MCs instead of just 'hardcoding' both seperate
 // struct TTMsg MCReset0 = TTMsg(RESETMC_ADD - MOTOR_STATIC_OFFSET, MCResetFunc);
 // struct TTMsg MCReset1 = TTMsg(MCReset0, MCOFFSET);
 // struct TTMsg MCTempRead0 = TTMsg(RESETMC_ADD - MOTOR_STATIC_OFFSET, MCResetFunc);
@@ -121,8 +96,45 @@ int T2AMsg[11];
 // struct TTMsg T2TData = TTMsg(T2T_ADD, {avgAccel, sig_brakePress, steeringAng}, {NULL, NULL, NULL, initalizeCar, NULL}, {IMDReadLight, AMSReadLight, carMode, sig_startButton, pedalAir});
 // struct TTMsg T2T2Data = TTMsg(T2T2_ADD, {rpmLWheel, rpmRWheel});
 
-void setMasterMessages() {
-    Master.newMsg(SPEEDWRITE_ADD, motorPushSpeed);
+bool prechargeFunc(TTMsg *msg) {              // BROKEN: is this suppose to be a handler?
+    if (digitalReadFast(sig_shutdownState)) { // if airs have no power, then precharge must be checked
+        DO_PRECHARGE = 1;                     // its basiaclly a fault
+        START_BUTTON_PUSHED = false;
+    }
+    // MC average?
+    float MC_voltage = max(abs(decodeLilEdian(*ECUData.MCVOLT_P01, *ECUData.MCVOLT_P02)), abs(decodeLilEdian(*ECUData.MCVOLT_P11, *ECUData.MCVOLT_P12))) / 10; //Returns in power of 10s
+    if (!digitalReadFast(sig_shutdownState) && DO_PRECHARGE) {                                                                                                 //if airs have no power but had before, then begin precharge circuit
+        digitalWriteFast(sig_prechargeAir, LOW);                                                                                                               //Keep air open
+        digitalWriteFast(sig_precharge, HIGH);                                                                                                                 //precharge is closed
+
+        if (*ECUData.BMSVolt_p >= 150 && (*ECUData.BMSVolt_p * 0.9) <= MC_voltage) { // BMS voltage is a global
+            DO_PRECHARGE = 0;
+            START_BUTTON_READY = true;
+        }
+    } else { // Can use any MCs voltage, will be the same, must be greater than 270V (0.9 * 300V)
+        // Should return to normal state
+        digitalWriteFast(sig_prechargeAir, HIGH); //close air
+        digitalWriteFast(sig_precharge, LOW);     //precharge is off
+    }
+    return false;
+}
+
+// Initalize messages
+void setMasterMessages() { // BROKEN: validDatas are not mapping to the right addresses!
+    //Both MCs with "mirror" messages
+    Master.newMsg(SPEEDWRITE_ADD, motorPushSpeed, MsgWrite);
+    Master.newMsg(RESETMC_ADD - MOTOR_STATIC_OFFSET, MCResetFunc, MsgWrite, MCOFFSET);
+    Master.newMsg(TEMP2_ADD - MOTOR_STATIC_OFFSET, MCResetFunc, MsgRead, MCOFFSET);
+    Master.newMsg(MOTORPOS_ADD - MOTOR_STATIC_OFFSET, {angle}, MsgRead, MCOFFSET);
+    Master.newMsg(FAULT_ADD, MsgRead, MCOFFSET);
+    Master.newMsg(VOLTAGE_ADD - MOTOR_STATIC_OFFSET, prechargeFunc, MsgRead, MCOFFSET);
+    // Others
+    Master.newMsg(BMS_STATS_ADD, {BMSTemp, BMSVolt, BMSSOC}, MsgRead);
+    Master.newMsg(MOTORL_ADD, {MotorLTemp}, MsgRead);
+    Master.newMsg(MOTORR_ADD, {MotorRTemp}, MsgRead);
+    // I don't like this concurrency issues may arise and system does not allow it rn
+    Master.newMsg(T2T_ADD, {avgAccel, sig_brakePress, steeringAng}, {NULL, NULL, NULL, initalizeCar, NULL}, {IMDReadLight, AMSReadLight, carMode, sig_startButton, pedalAir}, MsgWrite);
+    Master.newMsg(T2T2_ADD, {rpmLWheel, rpmRWheel}, MsgWrite);
 }
 
 // initECUPointers // after all is declared set the appropriate pointers
@@ -155,48 +167,48 @@ void setMasterMessages() {
 // TODO: calculate average speed
 // TODO: Active aero
 
-// void pushT2A() { // final push to tablet | arraysize: Teensy2SerialArrSize array: Teensy2SerialArr
-//     String s = "S ";
-//     T2AMsg[0] = *ECUData.BMSVolt_p;
-//     T2AMsg[1] = *ECUData.BMSTEMP_p;
-//     T2AMsg[2] = 0; // avgSpeed go here
-//     T2AMsg[3] = *ECUData.LMTEMP_P;
-//     T2AMsg[4] = *ECUData.RMTEMP_P;
-//     T2AMsg[5] = (*ECUData.MCTEMP_P0 + *ECUData.MCTEMP_P1) / 2; // avg of temps?
-//     T2AMsg[6] = 0;                                             // do both mc!
-//     T2AMsg[7] = 0;                                             // aero
-//     T2AMsg[8] = *ECUData.BMSSOC_P;
-//     T2AMsg[9] = *ECUData.BMSBUSCURRENT_P;
-//     pruneFaults();
-//     // T2AMsg[10] = buildFaultList(); //gets updated by fault handler
-//     for (int i; i < 11; i++) {
-//         s += T2AMsg[i] + " ";
-//     }
-//     Serial.println(s);
-// }
+void pushT2A() { // final push to tablet | arraysize: Teensy2SerialArrSize array: Teensy2SerialArr
+    String s = "S ";
+    T2AMsg[0] = Master.getData(BMSVolt);
+    T2AMsg[1] = Master.getData(BMSTemp);
+    T2AMsg[2] = 0; // avgSpeed go here
+    T2AMsg[3] = Master.getData(MotorLTemp);
+    T2AMsg[4] = Master.getData(MotorRTemp);
+    T2AMsg[5] = (Master.getData(ControlBoard, 0) + Master.getData(ControlBoard, 1)) / 2; // avg of temps?
+    T2AMsg[6] = 0;                                                                       // do both mc!
+    T2AMsg[7] = 0;                                                                       // aero
+    T2AMsg[8] = Master.getData(BMSSOC);
+    T2AMsg[9] = Master.getData(BMSCurrent);
+    pruneFaults();
+    // T2AMsg[10] = buildFaultList(); //gets updated by fault handler
+    for (int i; i < 11; i++) {
+        s += T2AMsg[i] + " ";
+    }
+    Serial.println(s);
+}
 
-//TODO: where do I get IMD and BMS fault from?
-// bool pruneFaults() { // figure which bits go where
-//     int final = 0;
-//     final = *ECUData.MCFAULT_P00 | *ECUData.MCFAULT_P10; // or faults to check both
-//     final = final << 8;
-//     final |= *ECUData.MCFAULT_P01 | *ECUData.MCFAULT_P11;
-//     T2AMsg[10] = final;
-//     return false;
-// }
+//TODO: redo IMD and AMS faults
+bool pruneFaults() { // figure which bits go where
+    int final = 0;
+    final = *ECUData.MCFAULT_P00 | *ECUData.MCFAULT_P10; // or faults to check both
+    final = final << 8;
+    final |= *ECUData.MCFAULT_P01 | *ECUData.MCFAULT_P11;
+    T2AMsg[10] = final;
+    return false;
+}
 
-// void chargerSet() { // Run in loop
-//     bool chargerState = digitalReadFast(sig_shutdownState);
-//     digitalWriteFast(sig_charger, chargerState);
-// }
+void chargerSet() { // Run in loop
+    bool chargerState = digitalReadFast(sig_shutdownState);
+    digitalWriteFast(sig_charger, chargerState);
+}
 
-// void setPump(int voltage = 0) { // Run in loop
-//     analogWriteDAC0(voltage);   // Test values on ocilli and check if it works
-// }
+void setPump(int voltage = 0) { // Run in loop
+    analogWriteDAC0(voltage);   // Test values on ocilli and check if it works
+}
 
-// void brakeLights() { // Run in loop
-//     digitalWriteFast(sig_brakeLight, *ECUData.T2TBRAKE_P > 50);
-// }
+void brakeLights() { // Run in loop
+    digitalWriteFast(sig_brakeLight, Master.getData(sig_brakePress) > 50);
+}
 
 // load messages as read or write
 // TTMsg ReadTTMessages[]{
@@ -216,11 +228,6 @@ void setMasterMessages() {
 /* 
     ----- END ECU specific data -----  
                                         */
-
-// TTMsg offsetMsg(TTMsg msg) { // duplicates message blocks; allows the offset block to have seperate read/write data
-//     TTMsg dup = TTMsg(msg.id + msg.offset, msg.packets, msg.flagFuncs, msg.flagValues, msg.handle);
-//     return dup;
-// }
 
 // are fault messages all just flags?
 // TODO: when a fault is detected read serial
@@ -247,26 +254,26 @@ void loop() {
     // pushT2A(); // Teensy to andriod
 }
 
-// void accelCheck() { // read accel numbrs and sync with T2T line
-//     int a1 = analogRead(sig_accel1);
-//     int a2 = analogRead(sig_accel2);
-//     if (a1 < 5 || a2 < 5) { // To check and clean if the value is jumping around
-//         a1 = 0;
-//         a2 = 0;
-//         // Fault to tablet
-//     }
-//     float errorcheck = abs(a1 - a2) / a1;    // Percent error
-//     if (errorcheck <= 0.1) {                 // if the error is less than 10%
-//         *ECUData.T2TACCEL_P = (a1 + a2) / 2; // this is how you do it right?
-//     } else {
-//         Serial.println("Error accelerator reading"); // ERROR?
-//     }
-// }
+void accelCheck() { // read accel numbrs and sync with T2T line
+    int a1 = analogRead(sig_accel1);
+    int a2 = analogRead(sig_accel2);
+    if (a1 < 5 || a2 < 5) { // To check and clean if the value is jumping around
+        a1 = 0;
+        a2 = 0;
+        // Fault to tablet
+    }
+    float errorcheck = abs(a1 - a2) / a1; // Percent error
+    if (errorcheck <= 0.1) {              // if the error is less than 10%
+        Master.setData(avgAccel, (a1 + a2) / 2);
+    } else {
+        Serial.println("Error accelerator reading"); // ERROR?
+    }
+}
 
-// // motor functions
+// motor functions
 
 // TODO: test what the accelerators are outputting
-bool motorPushSpeed(TTMsg msg) {
+bool motorPushSpeed(TTMsg *msg) {
     // "the value of the tquore needs to be a power of 10 of the actual tourqe;" by dominck
     // call ECEdata to accelerator value
     // TODO: torque vector function thing? probably goes here
@@ -280,37 +287,23 @@ bool motorPushSpeed(TTMsg msg) {
     return false; // Don't continue normal TTMsg proccessing
 }
 
-void motorWriteSpeed(TTMsg msg, byte offset, bool direction, int speed) { // speed is value 0 - 860
-    int percent_speed = constrain(map(speed, 0, 1024, 0, 400), 0, 400);   // seprate func for negative vals (regen)
+void motorWriteSpeed(TTMsg *msg, byte offset, bool direction, int speed) { // speed is value 0 - 860
+    int percent_speed = constrain(map(speed, 0, 1024, 0, 400), 0, 400);    // seprate func for negative vals (regen)
     // Serial.println(percent_speed);
     //Calculations value = (high_byte x 256) + low_byte
     byte low_byte = percent_speed % 256;
     byte high_byte = percent_speed / 256;
-    msg.id = SPEEDWRITE_ADD + offset - MOTOR_STATIC_OFFSET;
-    // Serial.println(msg.id);
-    msg.ext = 0;
-    msg.len = 8;
-    msg.buf[0] = low_byte; // NM
-    msg.buf[1] = high_byte;
-    msg.buf[2] = 0; // Speed
-    msg.buf[3] = 0;
-    msg.buf[4] = direction;           // Direction
-    msg.buf[5] = START_BUTTON_PUSHED; // Inverter enable byte
-    msg.buf[6] = 0;                   // Last two are the maximum torque values || if 0 then defualt values are set
-    msg.buf[7] = 0;
-    writeTTMsg(msg);
+    msg->id = SPEEDWRITE_ADD + offset - MOTOR_STATIC_OFFSET;
+    // Serial.println(msg->id);
+    msg->ext = 0;
+    msg->len = 8;
+    msg->buf[0] = low_byte; // NM
+    msg->buf[1] = high_byte;
+    msg->buf[2] = 0; // Speed
+    msg->buf[3] = 0;
+    msg->buf[4] = direction;           // Direction
+    msg->buf[5] = START_BUTTON_PUSHED; // Inverter enable byte
+    msg->buf[6] = 0;                   // Last two are the maximum torque values || if 0 then defualt values are set
+    msg->buf[7] = 0;
+    Messenger.writeMsg(msg);
 }
-
-// // Debug Funcs
-// void printMsg(TTMsg const &msg) { // Print out can msg buffer w/ ID
-//     Serial.print(msg.id, HEX);
-//     Serial.println(" = ");
-//     Serial.println(msg.buf[0]);
-//     Serial.println(msg.buf[1]);
-//     Serial.println(msg.buf[2]);
-//     Serial.println(msg.buf[3]);
-//     Serial.println(msg.buf[4]);
-//     Serial.println(msg.buf[5]);
-//     Serial.println(msg.buf[6]);
-//     Serial.println(msg.buf[7]);
-// }

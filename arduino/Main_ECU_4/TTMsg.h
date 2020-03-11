@@ -1,14 +1,16 @@
 #ifndef TTMSG_H
 #define TTMSG_H
 #define MAXVALIDDATA 81 // highest value of a validData type
-#define MSGREADS 8      // max of 8 messages
-#define MSGWRITES 8
+// WARNING!!! Due to incredible implementation skills, the size of the array must be manually set; this includes the "mirror" messages for read/write :/
+// this can be fixed by making this limit huge and checking for null buuut naah
+#define MSGREADS 8  // max # of messages to be read
+#define MSGWRITES 8 // max # of messages to be written
 
 #include "Funcs.h"
-#include <IFCT.h>                 // ImprovedFLexCanLibrary
-typedef uint32_t uint32;          // clean it up a lil
-typedef bool (*msgHandle)(TTMsg); // for message specialization such as a message block with only flags
-typedef void (*flagReader)(bool); // functions that are called when flag bits are true
+#include <IFCT.h>                   // ImprovedFLexCanLibrary
+typedef uint32_t uint32;            // clean it up a lil
+typedef bool (*msgHandle)(TTMsg *); // for message specialization such as a message block with only flags
+typedef void (*flagReader)(bool);   // functions that are called when flag bits are true
 
 // TODO: decide on addresses for all the sensors and bms
 enum CanADR : uint32 {
@@ -147,7 +149,7 @@ enum validData : uint8_t { // Used to identify what data goes into what message
 // TODO: actually initalize TTMsg and CAN_message_t values in constructor instead of depending on just the default values!
 struct TTMsg : public CAN_message_t { // Teensy to Teensy message definition/structure
     validData packets[4] = {NIL};     // data that have data in this message; position in table sets where PKT goes (see ^) // points to table of 4
-    uint32 offset = 0;                // now any data can have an offset for duplicates
+    bool isOffset = 0;                // now any data can have an offset for one "mirror" message
     flagReader flagFuncs[8] = {0};    // functions that are called when a flag bit is true | limits callbacks to flag byte 0 // points to table of 8
     validData flagValues[8] = {NIL};  // sensor pins to read and push onto the flag byte | only flag byte 0 // points to table of 8
     msgHandle handle = 0;             // function that can handle the message instead | for specialization of messages

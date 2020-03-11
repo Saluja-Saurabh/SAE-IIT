@@ -3,7 +3,9 @@
 bool MsgMaster::newMsg(uint32 i, bool isReadMsg, uint32 off = 0) { // blank msg
     TTMsg msg;
     msg.id = i;
-    msg.offset = off;
+    if (off) {
+        offsetMsg(msg, off, isReadMsg);
+    }
     insertMsg(msg, isReadMsg);
 }
 bool MsgMaster::newMsg(uint32 i, msgHandle h, bool isReadMsg, uint32 off = 0) { // purely handled by separate functions
@@ -31,15 +33,16 @@ bool MsgMaster::newMsg(TTMsg msg, bool isReadMsg, uint32 off = 0) { // explicit 
     msg.handle = msg.handle;
     insertMsg(msg, isReadMsg);
 }
-bool MsgMaster::newMsg(uint32 i, validData p[4], flagReader fF[8], validData fV[8], msgHandle h, bool isReadMsg, uint32 off = 0) { // for duplication purposes
-    TTMsg msg;
-    msg.id = i;
-    memcpy(msg.packets, p, 16);     // copy values to TTMsg using memcpy
-    memcpy(msg.flagFuncs, fF, 16);  // bc c++ can't assign after
-    memcpy(msg.flagValues, fV, 16); // initalization or somthin lik dat
-    msg.handle = h;
-    msg.offset = off;
-    insertMsg(msg, isReadMsg);
+void MsgMaster::offsetMsg(TTMsg &msg, uint32 off, bool isReadMsg) { // duplicates message blocks; allows the offset block to have seperate read/write data
+    // Master.newMsg(msg->id + msg->offset, msg->packets, msg->flagFuncs, msg->flagValues, msg->handle, isReadMsg);
+    TTMsg msgDup;
+    msgDup.id = msg.id + off;
+    memcpy(msgDup.packets, msg.packets, 16);       // copy values to TTMsg using memcpy
+    memcpy(msgDup.flagFuncs, msg.flagFuncs, 16);   // bc c++ can't assign after
+    memcpy(msgDup.flagValues, msg.flagValues, 16); // initalization or somthin lik dat
+    msgDup.handle = msg.handle;
+    msgDup.isOffset = true; // show that this msg is a "mirror" of another
+    insertMsg(msgDup, isReadMsg);
 }
 
 void MsgMaster::begin() {
@@ -96,26 +99,35 @@ void MsgMaster::insertMsg(TTMsg &msg, bool isReadMsg) {
     }
 }
 
-int16_t MsgMaster::getData(validData lookup) {
+int16_t MsgMaster::getData(validData lookup, bool isOffset = 0) {
     if (lookup < MAXVALIDDATA) {          // hard coded clamp of max validData
         uint8_t found = memoFlag[lookup]; // get pos of bit if it is a flag
         if (found) {                      // if pos is not 0 then it is a flag
-            return bitRead(*memoData[lookup], found - 1);
+            return bitRead(isOffset ? *memoDataOff[lookup] : *memoData[lookup], found - 1);
         }
         // it is not a flag so must be word
-        return *memoData[lookup];
+        return isOffset ? *memoDataOff[lookup] : *memoData[lookup];
     }
     return -1;
 }
 
-bool MsgMaster::setData(validData lookup, int16_t value) {
-    if (lookup < MAXVALIDDATA) {                                                       // hard coded clamp of max validData
-        uint8_t found = memoFlag[lookup];                                              // get pos of bit if it is a flag
-        if (found) {                                                                   // if pos is not 0 then it is a flag
+bool MsgMaster::setData(validData lookup, int16_t value, bool isOffset = 0) {
+    if (lookup < MAXVALIDDATA) {                                                              // hard coded clamp of max validData
+        uint8_t found = memoFlag[lookup];                                                     // get pos of bit if it is a flag
+        if (found) {                                                                          // if pos is not 0 then it is a flag
+            if (isOffset) {                                                                   // if requesting offset version look up offsetData
+                *memoDataOff[lookup] = bitWrite(*memoData[lookup], found - 1, value ? 1 : 0); // get value, set bit, then change value
+                return true;
+            }
             *memoData[lookup] = bitWrite(*memoData[lookup], found - 1, value ? 1 : 0); // get value, set bit, then change value
             return true;
         }
         // it is not a flag so must be word
+        if (isOffset) {
+            *memoDataOff[lookup] = value;
+            return true;
+        }
+
         *memoData[lookup] = value;
         return true;
     }
@@ -130,15 +142,15 @@ void MsgMaster::finalize() {
             dataPoint = msg->flagValues[i];
             if (dataPoint) {
                 msg->containsFlag = true;
-                memoFlag[dataPoint] = j + 1;         // store the bit position; also confirming this value is a flag | shift by one because 0 == nil
-                memoData[dataPoint] = &msg->data[3]; // make sure this works!
+                memoFlag[dataPoint] = j + 1;                                                  // store the bit position; also confirming this value is a flag | shift by one because 0 == nil
+                msg->isOffset ? memoDataOff[dataPoint] : memoData[dataPoint] = &msg->data[3]; // make sure this works!
             }
         }
 
         for (j = 0; j < 4; j++) {
             dataPoint = msg->packets[i];
             if (dataPoint) {
-                memoData[dataPoint] = &msg->data[i]; // make sure this works! | Gets refrence of actual data entry on TTMsg
+                msg->isOffset ? memoDataOff[dataPoint] : memoData[dataPoint] = &msg->data[i]; // make sure this works! | Gets refrence of actual data entry on TTMsg
             }
         }
 
@@ -153,15 +165,15 @@ void MsgMaster::finalize() {
             dataPoint = msg->flagValues[i];
             if (dataPoint) {
                 msg->containsFlag = true;
-                memoFlag[dataPoint] = j + 1;         // store the bit position; also confirming this value is a flag | shift by one because 0 == nil
-                memoData[dataPoint] = &msg->data[3]; // make sure this works!
+                memoFlag[dataPoint] = j + 1;                                                  // store the bit position; also confirming this value is a flag | shift by one because 0 == nil
+                msg->isOffset ? memoDataOff[dataPoint] : memoData[dataPoint] = &msg->data[3]; // make sure this works!
             }
         }
 
         for (j = 0; j < 4; j++) {
             dataPoint = msg->packets[i];
             if (dataPoint) {
-                memoData[dataPoint] = &msg->data[i]; // make sure this works! | Gets refrence of actual data entry on TTMsg
+                msg->isOffset ? memoDataOff[dataPoint] : memoData[dataPoint] = &msg->data[i]; // make sure this works! | Gets refrence of actual data entry on TTMsg
             }
         }
 

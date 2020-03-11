@@ -25,15 +25,13 @@ void CANMSG::readTTMsg(TTMsg *msg, const byte buf[8]) {
     for (byte i = 0; i < stop; i += 2) {
         if (msg->packets[i]) {                                     // are we expecting data on this packet?
             msg->data[i / 2] = decodeLilEdian(buf[i], buf[i + 1]); // decode and store
-            // do we need to store the sepreate bytes? we are now storing the decoded data
-            // msg.buf[i] = buf[i];                                  // store lowByte
-            // msg.buf[i + 1] = buf[i + 1];                          // store highByte
+            // TTMsg buf values not modified as only data array is needed for the read only TTMsgs
         }
     }
 }
 // Iterate through defined TTMsgs and check if the address is one of theirs
 void CANMSG::recieveMsg(const CAN_message_t &msgIn) {
-    for (uint8_t i = 0; i < MSGREADS; i++) {
+    for (uint8_t i = 0; i < MSGREADS; i++) { // TODO: memoize this
         TTMsg *msg = ReadTTMessages[i];
         if (msg->id == msgIn.id) {
             readTTMsg(msg, msgIn.buf); // id matches; interpret data based off matching msg structure
@@ -42,8 +40,8 @@ void CANMSG::recieveMsg(const CAN_message_t &msgIn) {
     }
 }
 
-void CANMSG::writeMsg(const CAN_message_t &msgOut) {
-    Can1.write(msgOut);
+void CANMSG::writeMsg(const CAN_message_t *msgOut) {
+    Can1.write(*msgOut); // does this duplicate the msg?
 };
 
 void CANMSG::begin(uint32_t baudRate = 500000) {
