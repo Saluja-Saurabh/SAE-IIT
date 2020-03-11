@@ -35,70 +35,70 @@ bool START_BUTTON_PUSHED = false;   // MC enable bit state
 bool PEDAL_ERROR = false;
 bool CAR_MODE = false; // true: RaceMode false: EcoMode
 bool FAULT = false;    // ams, bms mc faults and DOPRECHARGE == 1 from precharge circuit
-CAN_message_t dataIn;  // Can data in obj
+// CAN_message_t dataIn;  // 1 data in obj
 const byte Teensy2SerialArrSize = 12;
 int Teensy2SerialArr[Teensy2SerialArrSize];
 int T2AMsg[11];
 
-void checkFaults() {
-}
+// void checkFaults() {
+// }
 
-// Flag Handles
-void initalizeCar(bool bit) {
-    START_BUTTON_PUSHED = true;
-    Serial.println("MOTORS UNLOCKED");
-}
+// // Flag Handles
+// void initalizeCar(bool bit) {
+//     START_BUTTON_PUSHED = true;
+//     Serial.println("MOTORS UNLOCKED");
+// }
 
-// handles
-void setPedalState(bool bit) {
-    PEDAL_ERROR = bit;
-}
+// // handles
+// void setPedalState(bool bit) {
+//     PEDAL_ERROR = bit;
+// }
 
-bool MCResetFunc(TTMsg msg) { // MC Fault reseter thing
-    msg.ext = 0;
-    msg.len = 8;
-    msg.buf[0] = 20;
-    msg.buf[1] = 0;
-    msg.buf[2] = 1;
-    msg.buf[3] = 0;
-    msg.buf[4] = 0;
-    msg.buf[5] = 0;
-    msg.buf[6] = 0;
-    msg.buf[7] = 0;
-    writeTTMsg(msg);
-    return true;
-} // IMPROVE: There may be reliability issues with only sending one?
+// bool MCResetFunc(TTMsg msg) { // MC Fault reseter thing
+//     msg.ext = 0;
+//     msg.len = 8;
+//     msg.buf[0] = 20;
+//     msg.buf[1] = 0;
+//     msg.buf[2] = 1;
+//     msg.buf[3] = 0;
+//     msg.buf[4] = 0;
+//     msg.buf[5] = 0;
+//     msg.buf[6] = 0;
+//     msg.buf[7] = 0;
+//     writeTTMsg(msg);
+//     return true;
+// } // IMPROVE: There may be reliability issues with only sending one?
 
-void setCarMode(bool bit) {
-    // TODO: ensure car is not moving
-    // if (*ECUData.MCMotorAng0 < 5) {
-    if (Master.getData(); < 5) { // rpm = motor controller rpm only for first MC
-        CAR_MODE = bit;
-    }
-}
+// void setCarMode(bool bit) {
+//     // TODO: ensure car is not moving
+//     // if (*ECUData.MCMotorAng0 < 5) {
+//     if (Master.getData(); < 5) { // rpm = motor controller rpm only for first MC
+//         CAR_MODE = bit;
+//     }
+// }
 
-bool prechargeFunc(TTMsg msg) {
-    if (digitalReadFast(sig_shutdownState)) { // if airs have no power, then precharge must be checked
-        DO_PRECHARGE = 1;                     // its basiaclly a fault
-        START_BUTTON_PUSHED = false;
-    }
-    // MC average?
-    float MC_voltage = max(abs(decodeLilEdian(*ECUData.MCVOLT_P01, *ECUData.MCVOLT_P02)), abs(decodeLilEdian(*ECUData.MCVOLT_P11, *ECUData.MCVOLT_P12))) / 10; //Returns in power of 10s
-    if (!digitalReadFast(sig_shutdownState) && DO_PRECHARGE) {                                                                                                 //if airs have no power but had before, then begin precharge circuit
-        digitalWriteFast(sig_prechargeAir, LOW);                                                                                                               //Keep air open
-        digitalWriteFast(sig_precharge, HIGH);                                                                                                                 //precharge is closed
+// bool prechargeFunc(TTMsg msg) {
+//     if (digitalReadFast(sig_shutdownState)) { // if airs have no power, then precharge must be checked
+//         DO_PRECHARGE = 1;                     // its basiaclly a fault
+//         START_BUTTON_PUSHED = false;
+//     }
+//     // MC average?
+//     float MC_voltage = max(abs(decodeLilEdian(*ECUData.MCVOLT_P01, *ECUData.MCVOLT_P02)), abs(decodeLilEdian(*ECUData.MCVOLT_P11, *ECUData.MCVOLT_P12))) / 10; //Returns in power of 10s
+//     if (!digitalReadFast(sig_shutdownState) && DO_PRECHARGE) {                                                                                                 //if airs have no power but had before, then begin precharge circuit
+//         digitalWriteFast(sig_prechargeAir, LOW);                                                                                                               //Keep air open
+//         digitalWriteFast(sig_precharge, HIGH);                                                                                                                 //precharge is closed
 
-        if (*ECUData.BMSVolt_p >= 150 && (*ECUData.BMSVolt_p * 0.9) <= MC_voltage) { // BMS voltage is a global
-            DO_PRECHARGE = 0;
-            START_BUTTON_READY = true;
-        }
-    } else { // Can use any MCs voltage, will be the same, must be greater than 270V (0.9 * 300V)
-        // Should return to normal state
-        digitalWriteFast(sig_prechargeAir, HIGH); //close air
-        digitalWriteFast(sig_precharge, LOW);     //precharge is off
-    }
-    return false;
-}
+//         if (*ECUData.BMSVolt_p >= 150 && (*ECUData.BMSVolt_p * 0.9) <= MC_voltage) { // BMS voltage is a global
+//             DO_PRECHARGE = 0;
+//             START_BUTTON_READY = true;
+//         }
+//     } else { // Can use any MCs voltage, will be the same, must be greater than 270V (0.9 * 300V)
+//         // Should return to normal state
+//         digitalWriteFast(sig_prechargeAir, HIGH); //close air
+//         digitalWriteFast(sig_precharge, LOW);     //precharge is off
+//     }
+//     return false;
+// }
 
 // Initalize messages
 //Both MCs
@@ -155,83 +155,72 @@ void setMasterMessages() {
 // TODO: calculate average speed
 // TODO: Active aero
 
-void pushT2A() { // final push to tablet | arraysize: Teensy2SerialArrSize array: Teensy2SerialArr
-    String s = "S ";
-    T2AMsg[0] = *ECUData.BMSVolt_p;
-    T2AMsg[1] = *ECUData.BMSTEMP_p;
-    T2AMsg[2] = 0; // avgSpeed go here
-    T2AMsg[3] = *ECUData.LMTEMP_P;
-    T2AMsg[4] = *ECUData.RMTEMP_P;
-    T2AMsg[5] = (*ECUData.MCTEMP_P0 + *ECUData.MCTEMP_P1) / 2; // avg of temps?
-    T2AMsg[6] = 0;                                             // do both mc!
-    T2AMsg[7] = 0;                                             // aero
-    T2AMsg[8] = *ECUData.BMSSOC_P;
-    T2AMsg[9] = *ECUData.BMSBUSCURRENT_P;
-    pruneFaults();
-    // T2AMsg[10] = buildFaultList(); //gets updated by fault handler
-    for (int i; i < 11; i++) {
-        s += T2AMsg[i] + " ";
-    }
-    Serial.println(s);
-}
+// void pushT2A() { // final push to tablet | arraysize: Teensy2SerialArrSize array: Teensy2SerialArr
+//     String s = "S ";
+//     T2AMsg[0] = *ECUData.BMSVolt_p;
+//     T2AMsg[1] = *ECUData.BMSTEMP_p;
+//     T2AMsg[2] = 0; // avgSpeed go here
+//     T2AMsg[3] = *ECUData.LMTEMP_P;
+//     T2AMsg[4] = *ECUData.RMTEMP_P;
+//     T2AMsg[5] = (*ECUData.MCTEMP_P0 + *ECUData.MCTEMP_P1) / 2; // avg of temps?
+//     T2AMsg[6] = 0;                                             // do both mc!
+//     T2AMsg[7] = 0;                                             // aero
+//     T2AMsg[8] = *ECUData.BMSSOC_P;
+//     T2AMsg[9] = *ECUData.BMSBUSCURRENT_P;
+//     pruneFaults();
+//     // T2AMsg[10] = buildFaultList(); //gets updated by fault handler
+//     for (int i; i < 11; i++) {
+//         s += T2AMsg[i] + " ";
+//     }
+//     Serial.println(s);
+// }
 
 //TODO: where do I get IMD and BMS fault from?
-bool pruneFaults() { // figure which bits go where
-    int final = 0;
-    final = *ECUData.MCFAULT_P00 | *ECUData.MCFAULT_P10; // or faults to check both
-    final = final << 8;
-    final |= *ECUData.MCFAULT_P01 | *ECUData.MCFAULT_P11;
-    T2AMsg[10] = final;
-    return false;
-}
+// bool pruneFaults() { // figure which bits go where
+//     int final = 0;
+//     final = *ECUData.MCFAULT_P00 | *ECUData.MCFAULT_P10; // or faults to check both
+//     final = final << 8;
+//     final |= *ECUData.MCFAULT_P01 | *ECUData.MCFAULT_P11;
+//     T2AMsg[10] = final;
+//     return false;
+// }
 
-void chargerSet() { // Run in loop
-    bool chargerState = digitalReadFast(sig_shutdownState);
-    digitalWriteFast(sig_charger, chargerState);
-}
+// void chargerSet() { // Run in loop
+//     bool chargerState = digitalReadFast(sig_shutdownState);
+//     digitalWriteFast(sig_charger, chargerState);
+// }
 
-void setPump(int voltage = 0) { // Run in loop
-    analogWriteDAC0(voltage);   // Test values on ocilli and check if it works
-}
+// void setPump(int voltage = 0) { // Run in loop
+//     analogWriteDAC0(voltage);   // Test values on ocilli and check if it works
+// }
 
-void brakeLights() { // Run in loop
-    digitalWriteFast(sig_brakeLight, *ECUData.T2TBRAKE_P > 50);
-}
+// void brakeLights() { // Run in loop
+//     digitalWriteFast(sig_brakeLight, *ECUData.T2TBRAKE_P > 50);
+// }
 
 // load messages as read or write
-TTMsg ReadTTMessages[]{
-    MCVolt0,
-    MCVolt1,
-    bmsStat,
-    T2TData,
-};
+// TTMsg ReadTTMessages[]{
+//     MCVolt0,
+//     MCVolt1,
+//     bmsStat,
+//     T2TData,
+// };
 
-TTMsg WriteTTMessages[]{
-    WriteSpeed,
-    MCReset0,
-    MCReset1,
-    T2TData,
-};
+// TTMsg WriteTTMessages[]{
+//     WriteSpeed,
+//     MCReset0,
+//     MCReset1,
+//     T2TData,
+// };
 
 /* 
     ----- END ECU specific data -----  
                                         */
 
-void initalizeMsg(TTMsg msg) {
-    // TODO: does this ensure no func is set for any flag?
-    if (msg.flagFuncs) { // use bool to see if flags are at byte 0
-        msg.containsFlag = true;
-        if (msg.packets[3]) { // if a flags exist and so do all four data slots then this is a problem
-            Serial.print("WARNING: FLAG AND MESSAGE CONFLICT! ID:");
-            Serial.println(msg.id, HEX);
-        } // TODO: find a way to display errors
-    }
-}
-
-TTMsg offsetMsg(TTMsg msg) { // duplicates message blocks; allows the offset block to have seperate read/write data
-    TTMsg dup = TTMsg(msg.id + msg.offset, msg.packets, msg.flagFuncs, msg.flagValues, msg.handle);
-    return dup;
-}
+// TTMsg offsetMsg(TTMsg msg) { // duplicates message blocks; allows the offset block to have seperate read/write data
+//     TTMsg dup = TTMsg(msg.id + msg.offset, msg.packets, msg.flagFuncs, msg.flagValues, msg.handle);
+//     return dup;
+// }
 
 // are fault messages all just flags?
 // TODO: when a fault is detected read serial
@@ -242,146 +231,71 @@ void setup() {
     pinMode(boardLed, OUTPUT);
     Serial.println("Hello!");
     LEDBlink();
-
-    for (auto msg : WriteTTMessages) {
-        initalizeMsg(msg);
-        if (msg.offset) {
-            initalizeMsg(offsetMsg(msg));
-        }
-    }
-
-    for (auto msg : ReadTTMessages) {
-        initalizeMsg(msg);
-        if (msg.offset) {
-            initalizeMsg(offsetMsg(msg));
-        }
-    }
-    initECUPointers();
     pinMode(2, OUTPUT); // Fusion Tech's Dual CAN-Bus R pin switch
     digitalWriteFast(2, LOW);
-    Can1.setBaudRate(500000); // Speeed
-    Can1.enableFIFO();        // FirstInFirstOut
     LEDBlink();
     digitalWriteFast(boardLed, LOW);
 }
 
 void loop() {
-    if (Can1.read(dataIn)) {
-        teensyRead(dataIn);
-    }
-    for (TTMsg msg : WriteTTMessages) { // Iterate through defined TTMsgs and push their data
-        updateData(msg);
-    }
-    pushT2A(); // Teensy to andriod
+    // if (Can1.read(dataIn)) {
+    //     teensyRead(dataIn);
+    // }
+    // for (TTMsg msg : WriteTTMessages) { // Iterate through defined TTMsgs and push their data
+    //     updateData(msg);
+    // }
+    // pushT2A(); // Teensy to andriod
 }
 
-void accelCheck() { // read accel numbrs and sync with T2T line
-    int a1 = analogRead(sig_accel1);
-    int a2 = analogRead(sig_accel2);
-    if (a1 < 5 || a2 < 5) { // To check and clean if the value is jumping around
-        a1 = 0;
-        a2 = 0;
-        // Fault to tablet
-    }
-    float errorcheck = abs(a1 - a2) / a1;    // Percent error
-    if (errorcheck <= 0.1) {                 // if the error is less than 10%
-        *ECUData.T2TACCEL_P = (a1 + a2) / 2; // this is how you do it right?
-    } else {
-        Serial.println("Error accelerator reading"); // ERROR?
-    }
-}
+// void accelCheck() { // read accel numbrs and sync with T2T line
+//     int a1 = analogRead(sig_accel1);
+//     int a2 = analogRead(sig_accel2);
+//     if (a1 < 5 || a2 < 5) { // To check and clean if the value is jumping around
+//         a1 = 0;
+//         a2 = 0;
+//         // Fault to tablet
+//     }
+//     float errorcheck = abs(a1 - a2) / a1;    // Percent error
+//     if (errorcheck <= 0.1) {                 // if the error is less than 10%
+//         *ECUData.T2TACCEL_P = (a1 + a2) / 2; // this is how you do it right?
+//     } else {
+//         Serial.println("Error accelerator reading"); // ERROR?
+//     }
+// }
 
-void updateData(TTMsg msg) {
-    if (msg.handle && !(msg.handle)(msg)) { // if the handle exists and returns true upon calling continue execution
-        return;
-    }
-    byte stop = 8;
-    if (msg.containsFlag) { // Readflags if they are expected
-        flagRead(msg);      // Check bytes
-        stop = 6;           // Skip flag bytes
-    }
-    for (byte i = 0; i < stop; i += 2) {
-        if (msg.packets[i / 2]) {                     // If we have a sensor for this packet read and store it
-            int val = analogRead(msg.packets[i / 2]); // TODO: Some sensors are digital not just analog!
-            msg.data[i / 2] = val;                    // store the raw value
-            msg.buf[i] = val % 256;
-            msg.buf[i + 1] = val / 256;
-        }
-    }
-    writeTTMsg(msg);
-}
+// void updateData(TTMsg msg) {
+//     if (msg.handle && !(msg.handle)(msg)) { // if the handle exists and returns true upon calling continue execution
+//         return;
+//     }
+//     byte stop = 8;
+//     if (msg.containsFlag) { // Readflags if they are expected
+//         flagRead(msg);      // Check bytes
+//         stop = 6;           // Skip flag bytes
+//     }
+//     for (byte i = 0; i < stop; i += 2) {
+//         if (msg.packets[i / 2]) {                     // If we have a sensor for this packet read and store it
+//             int val = analogRead(msg.packets[i / 2]); // TODO: Some sensors are digital not just analog!
+//             msg.data[i / 2] = val;                    // store the raw value
+//             msg.buf[i] = val % 256;
+//             msg.buf[i + 1] = val / 256;
+//         }
+//     }
+//     writeTTMsg(msg);
+// }
 
-// IMPROVE: anyway to make this take advantage of the compiler?
-int16_t decodeLilEdian(const byte low, const byte high) {
-    int16_t value = 0;
-    int16_t full_data = high * 255 + low;
-    if (high < 128) { // positive
-        value = full_data;
-    } else if (high > 128) { //neg
-        value = map(full_data, 65280, 32640, 0, -32640);
-    }
-    return value;
-}
+// void flagRead(TTMsg msg) {                                          // read pins that map to flag variables
+//     for (byte i = 7; i <= 6; i--) {                                 // capped to first two bytes
+//         msg.buf[i] = 0;                                             // clear flags
+//         for (byte bit = 0; bit < 8; ++bit) {                        // iterate through byte bits
+//             if (msg.flagValues[bit]) {                              // check if there is a flag defined
+//                 msg.buf[i] |= digitalReadFast(msg.flagValues[bit]); // store flag
+//             }                                                       //
+//             msg.buf[i] = msg.buf[i] << 1;                           // shift bits
+//         }
+//     }
+// }
 
-void flagRead(TTMsg msg) {                                          // read pins that map to flag variables
-    for (byte i = 7; i <= 6; i--) {                                 // capped to first two bytes
-        msg.buf[i] = 0;                                             // clear flags
-        for (byte bit = 0; bit < 8; ++bit) {                        // iterate through byte bits
-            if (msg.flagValues[bit]) {                              // check if there is a flag defined
-                msg.buf[i] |= digitalReadFast(msg.flagValues[bit]); // store flag
-            }                                                       //
-            msg.buf[i] = msg.buf[i] << 1;                           // shift bits
-        }
-    }
-}
-
-void flagScan(const byte &flagByte, flagReader funcTbl[8]) { // Only used by read messages
-    if (flagByte) {                                          // check if flag has any true bits
-        for (byte bit = 0; bit < 8; ++bit) {                 // iterate though flag bits
-            if (funcTbl[bit]) {                              // check that we can do something if the bit is true
-                funcTbl[bit]((flagByte >> bit) & 1);         // call function based off bit pos
-            }
-        }
-    }
-}
-
-// Push data to andriod using Teensy UART | Eg. Serial1.write();
-// TODO: add way to push message blocks to andriod with Serial1.write
-// IMPROVE: make andriod decode bytes
-void writeTTMsg(TTMsg msg) { // TODO: can't we just get rid of this?
-    // Write2Andriod(msg);
-    Can1.write(msg);
-}
-
-void readTTMsg(TTMsg msg, const byte buf[8]) {
-    byte stop = 8;
-    if (msg.containsFlag) {              // Readflags if they are expected
-        flagScan(buf[7], msg.flagFuncs); // Only checking byte 0
-        msg.buf[7] = buf[7];             // Store byte 0 of flags
-        msg.buf[6] = buf[6];             // also stores byte 1 for completion sake
-        stop = 6;                        // Skip flag bytes
-    }
-    for (byte i = 0; i < stop; i += 2) {
-        if (msg.packets[i]) {                                     // are we expecting data on this packet?
-            msg.data[i / 2] = decodeLilEdian(buf[i], buf[i + 1]); // decode and store
-            // do we need to store the sepreate bytes? we are now storing the decoded data
-            // msg.buf[i] = buf[i];                                  // store lowByte
-            // msg.buf[i + 1] = buf[i + 1];                          // store highByte
-        }
-    }
-}
-
-// Iterate through defined TTMsgs and check if the address is one of theirs
-void teensyRead(const CAN_message_t &dataIn) {
-    for (TTMsg msg : ReadTTMessages) {
-        if ((msg).id == dataIn.id) {
-            readTTMsg(msg, dataIn.buf); // id matches; interpret data based off matching msg structure
-            break;
-        };
-    }
-}
-
-// motor functions
+// // motor functions
 
 // TODO: test what the accelerators are outputting
 bool motorPushSpeed(TTMsg msg) {
@@ -419,16 +333,16 @@ void motorWriteSpeed(TTMsg msg, byte offset, bool direction, int speed) { // spe
     writeTTMsg(msg);
 }
 
-// Debug Funcs
-void printMsg(TTMsg const &msg) { // Print out can msg buffer w/ ID
-    Serial.print(msg.id, HEX);
-    Serial.println(" = ");
-    Serial.println(msg.buf[0]);
-    Serial.println(msg.buf[1]);
-    Serial.println(msg.buf[2]);
-    Serial.println(msg.buf[3]);
-    Serial.println(msg.buf[4]);
-    Serial.println(msg.buf[5]);
-    Serial.println(msg.buf[6]);
-    Serial.println(msg.buf[7]);
-}
+// // Debug Funcs
+// void printMsg(TTMsg const &msg) { // Print out can msg buffer w/ ID
+//     Serial.print(msg.id, HEX);
+//     Serial.println(" = ");
+//     Serial.println(msg.buf[0]);
+//     Serial.println(msg.buf[1]);
+//     Serial.println(msg.buf[2]);
+//     Serial.println(msg.buf[3]);
+//     Serial.println(msg.buf[4]);
+//     Serial.println(msg.buf[5]);
+//     Serial.println(msg.buf[6]);
+//     Serial.println(msg.buf[7]);
+// }

@@ -1,6 +1,8 @@
 #ifndef TTMSG_H
 #define TTMSG_H
 #define MAXVALIDDATA 81 // highest value of a validData type
+#define MSGREADS 8      // max of 8 messages
+#define MSGWRITES 8
 
 #include <IFCT.h>                 // ImprovedFLexCanLibrary
 typedef uint32_t uint32;          // clean it up a lil
@@ -142,14 +144,14 @@ enum validData : uint8_t { // Used to identify what data goes into what message
 */
 
 // TODO: actually initalize TTMsg and CAN_message_t values in constructor instead of depending on just the default values!
-extern struct TTMsg : public CAN_message_t { // Teensy to Teensy message definition/structure
-    validData packets[4] = {NIL};            // data that have data in this message; position in table sets where PKT goes (see ^) // points to table of 4
-    uint32 offset = 0;                       // now any data can have an offset for duplicates
-    flagReader flagFuncs[8] = {0};           // functions that are called when a flag bit is true | limits callbacks to flag byte 0 // points to table of 8
-    validData flagValues[8] = {NIL};         // sensor pins to read and push onto the flag byte | only flag byte 0 // points to table of 8
-    msgHandle handle = 0;                    // function that can handle the message instead | for specialization of messages
-    bool containsFlag = 0;                   // used for memo
-    int16_t data[4] = {0};                   // store decoded or pin data for later use | NOTE: this value is synced with actual bytes that are read/written
-};                                           // IMPROVE: Flags can be extended to handle two bytes if it is really neccessary
+struct TTMsg : public CAN_message_t { // Teensy to Teensy message definition/structure
+    validData packets[4] = {NIL};     // data that have data in this message; position in table sets where PKT goes (see ^) // points to table of 4
+    uint32 offset = 0;                // now any data can have an offset for duplicates
+    flagReader flagFuncs[8] = {0};    // functions that are called when a flag bit is true | limits callbacks to flag byte 0 // points to table of 8
+    validData flagValues[8] = {NIL};  // sensor pins to read and push onto the flag byte | only flag byte 0 // points to table of 8
+    msgHandle handle = 0;             // function that can handle the message instead | for specialization of messages
+    bool containsFlag = 0;            // used for memo
+    int16_t data[4] = {0};            // store decoded or pin data for later use | NOTE: this value is synced with actual bytes that are read/written
+};                                    // IMPROVE: Flags can be extended to handle two bytes if it is really neccessary
 
 #endif

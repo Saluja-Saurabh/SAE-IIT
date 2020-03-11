@@ -42,10 +42,20 @@ bool MsgMaster::newMsg(uint32 i, validData p[4], flagReader fF[8], validData fV[
     insertMsg(msg, isReadMsg);
 }
 
+void MsgMaster::begin() {
+    finalize();
+    Messenger.setIO(ReadTTMessages, WriteTTMessages);
+    Messenger.begin();
+}
+
+void MsgMaster::run() {
+    Messenger.run();
+}
+
 void MsgMaster::insertMsg(TTMsg &msg, bool isReadMsg) {
-    if (isReadMsg && READNo < MSGMASTERREADS - 1) {
+    if (isReadMsg && READNo < MSGREADS - 1) {
         ReadTTMessages[READNo++] = &msg;
-    } else if (WRITENo < MSGMASTERWRITES - 1) {
+    } else if (WRITENo < MSGWRITES - 1) {
         WriteTTMessages[WRITENo++] = &msg;
     }
 }
@@ -76,12 +86,10 @@ bool MsgMaster::setData(validData lookup, int16_t value) {
     return false;
 }
 
-bool MsgMaster::finalize() {
-    TTMsg *msg;
+void MsgMaster::finalize() {
     validData dataPoint;
     uint8_t i, j;
-    for (i = 0; i < MSGMASTERREADS; i++) {
-        msg = ReadTTMessages[i];
+    for (TTMsg *msg : ReadTTMessages) {
         for (j = 0; j < 8; j++) {
             dataPoint = msg->flagValues[i];
             if (dataPoint) {
@@ -104,8 +112,7 @@ bool MsgMaster::finalize() {
         } // TODO: find a way to display errors
     }
 
-    for (i = 0; i < MSGMASTERWRITES; i++) {
-        msg = WriteTTMessages[i];
+    for (TTMsg *msg : WriteTTMessages) {
         for (j = 0; j < 8; j++) {
             dataPoint = msg->flagValues[i];
             if (dataPoint) {
@@ -127,4 +134,19 @@ bool MsgMaster::finalize() {
             Serial.println(msg->id, HEX);
         } // TODO: find a way to display errors
     }
+
+    // TODO: offsets of messages
+    // for (auto msg : WriteTTMessages) {
+    //     initalizeMsg(msg);
+    //     if (msg.offset) {
+    //         initalizeMsg(offsetMsg(msg));
+    //     }
+    // }
+
+    // for (auto msg : ReadTTMessages) {
+    //     initalizeMsg(msg);
+    //     if (msg.offset) {
+    //         initalizeMsg(offsetMsg(msg));
+    //     }
+    // }
 }
