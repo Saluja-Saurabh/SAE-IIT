@@ -1,6 +1,6 @@
 #ifndef TTMSG_H
 #define TTMSG_H
-#define MAXVALIDDATA 81 // highest value of a validData type
+#define MAXVALIDDATA 99 // highest value of a validData type
 // WARNING!!! Due to incredible implementation skills, the size of the array must be manually set; this includes the "mirror" messages for read/write :/
 // this can be fixed by making this limit huge and checking for null buuut naah
 #define MSGREADS 8  // max # of messages to be read
@@ -84,6 +84,12 @@ enum validData : uint8_t { // Used to identify what data goes into what message
     BMSVolt = 76,
     BMSTemp = 77,
     BMSSOC = 78,
+    BMSCurrent = 82,
+    //FAULT
+    MCFAULT0 = 83,
+    MCFAULT1 = 83,
+    MCFAULT2 = 83,
+    MCFAULT3 = 83,
 
     // accelerator
     avgAccel = 79, // Manually set

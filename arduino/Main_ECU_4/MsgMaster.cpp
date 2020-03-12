@@ -56,7 +56,6 @@ void MsgMaster::begin() {
 }
 
 int16_t MsgMaster::getDataLookup(uint32_t address, uint8_t dataPacket, bool isOffset = 0) {
-    
 }
 
 void flagRead(TTMsg *msg) { // read pins that map to flag variables
@@ -108,36 +107,29 @@ void MsgMaster::insertMsg(TTMsg &msg, bool isReadMsg) {
 }
 
 int16_t MsgMaster::getData(validData lookup, bool isOffset = 0) {
-    if (lookup < MAXVALIDDATA) {          // hard coded clamp of max validData
-        uint8_t found = memoFlag[lookup]; // get pos of bit if it is a flag
-        if (found) {                      // if pos is not 0 then it is a flag
-            return bitRead(isOffset ? *memoDataOff[lookup] : *memoData[lookup], found - 1);
+    if (lookup < MAXVALIDDATA) {                                                                  // hard coded clamp of max validData
+        uint16_t found = isOffset ? *memoDataOff[lookup] : *memoData[lookup];                     // if this is a "mirror" lookup switch arrays
+        uint8_t flagBit = memoFlag[lookup];                                                       // if memoFlag is found this is a flag
+        if (found) {                                                                              // if value is defined and found
+            if (flagBit)                                                                          // return bit if value is a flag
+                return bitRead(isOffset ? *memoDataOff[lookup] : *memoData[lookup], flagBit - 1); // read bit form flag
+            return found;                                                                         // return word if not flag
         }
-        // it is not a flag so must be word
-        return isOffset ? *memoDataOff[lookup] : *memoData[lookup];
     }
-    return -1;
+    return -420;
 }
 
 bool MsgMaster::setData(validData lookup, int16_t value, bool isOffset = 0) {
-    if (lookup < MAXVALIDDATA) {                                                              // hard coded clamp of max validData
-        uint8_t found = memoFlag[lookup];                                                     // get pos of bit if it is a flag
-        if (found) {                                                                          // if pos is not 0 then it is a flag
-            if (isOffset) {                                                                   // if requesting offset version look up offsetData
-                *memoDataOff[lookup] = bitWrite(*memoData[lookup], found - 1, value ? 1 : 0); // get value, set bit, then change value
-                return true;
-            }
-            *memoData[lookup] = bitWrite(*memoData[lookup], found - 1, value ? 1 : 0); // get value, set bit, then change value
+    if (lookup < MAXVALIDDATA) {                                            // hard coded clamp of max validData
+        int16_t *found = isOffset ? memoDataOff[lookup] : memoData[lookup]; // if this is a "mirror" lookup switch arrays
+        uint8_t flagBit = memoFlag[lookup];                                 // if memoFlag is found this is a flag
+        if (*found) {                                                       // if pos is not 0 then it is a flag
+            if (flagBit)
+                *found = bitWrite(*found, flagBit - 1, value ? 1 : 0); // get value, set bit, then change value
+            else
+                *found = value;
             return true;
         }
-        // it is not a flag so must be word
-        if (isOffset) {
-            *memoDataOff[lookup] = value;
-            return true;
-        }
-
-        *memoData[lookup] = value;
-        return true;
     }
     return false;
 }
@@ -190,19 +182,4 @@ void MsgMaster::finalize() {
             Serial.println(msg->id, HEX);
         } // TODO: find a way to display errors
     }
-
-    // TODO: offsets of messages
-    // for (auto msg : WriteTTMessages) {
-    //     initalizeMsg(msg);
-    //     if (msg.offset) {
-    //         initalizeMsg(offsetMsg(msg));
-    //     }
-    // }
-
-    // for (auto msg : ReadTTMessages) {
-    //     initalizeMsg(msg);
-    //     if (msg.offset) {
-    //         initalizeMsg(offsetMsg(msg));
-    //     }
-    // }
 }

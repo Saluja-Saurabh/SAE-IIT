@@ -12,7 +12,7 @@ private:
     TTMsg **WriteTTMessages;
 
 public:
-    void setIO(TTMsg *messageReads[MSGREADS], TTMsg *messageWrites[MSGWRITES]);
+    void setIO(TTMsg *messageReads[MSGREADS], TTMsg *messageWrites[MSGWRITES]); //IMPROVE: only pass id and buf of messages
     void begin(uint32_t baudRate = 500000);
     void writeMsg(const CAN_message_t *msgOut);
 };

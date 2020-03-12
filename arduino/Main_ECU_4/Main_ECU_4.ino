@@ -43,17 +43,24 @@ int T2AMsg[11];
 // void checkFaults() {
 // }
 
-// // Flag Handles
+// Flag handles
 void initalizeCar(bool bit) {
     START_BUTTON_PUSHED = true;
     Serial.println("MOTORS UNLOCKED");
 }
 
-// // handles
-// void setPedalState(bool bit) {
-//     PEDAL_ERROR = bit;
-// }
+void setPedalState(bool bit) {
+    PEDAL_ERROR = bit;
+}
 
+void setCarMode(bool bit) {
+    // TODO: ensure car is not moving
+    if (Master.getData(angle, 0) < 5) { // rpm = motor controller rpm only for first MC
+        CAR_MODE = bit;
+    }
+}
+
+// handles
 bool MCResetFunc(TTMsg *msg) { // MC Fault reseter thing
     msg->ext = 0;
     msg->len = 8;
@@ -68,14 +75,6 @@ bool MCResetFunc(TTMsg *msg) { // MC Fault reseter thing
     Messenger.writeMsg(msg);
     return true;
 } // IMPROVE: There may be reliability issues with only sending one?
-
-// void setCarMode(bool bit) {
-//     // TODO: ensure car is not moving
-//     // if (*ECUData.MCMotorAng0 < 5) {
-//     if (Master.getData(); < 5) { // rpm = motor controller rpm only for first MC
-//         CAR_MODE = bit;
-//     }
-// }
 
 //Both MCs
 // struct TTMsg WriteSpeed = TTMsg(SPEEDWRITE_ADD, motorPushSpeed);
@@ -95,47 +94,6 @@ bool MCResetFunc(TTMsg *msg) { // MC Fault reseter thing
 // struct TTMsg motorR = TTMsg(MOTORR_ADD, {MotorRTemp});
 // struct TTMsg T2TData = TTMsg(T2T_ADD, {avgAccel, sig_brakePress, steeringAng}, {NULL, NULL, NULL, initalizeCar, NULL}, {IMDReadLight, AMSReadLight, carMode, sig_startButton, pedalAir});
 // struct TTMsg T2T2Data = TTMsg(T2T2_ADD, {rpmLWheel, rpmRWheel});
-
-bool prechargeFunc(TTMsg *msg) {              // BROKEN: is this suppose to be a handler?
-    if (digitalReadFast(sig_shutdownState)) { // if airs have no power, then precharge must be checked
-        DO_PRECHARGE = 1;                     // its basiaclly a fault
-        START_BUTTON_PUSHED = false;
-    }
-    // MC average?
-    float MC_voltage = max(abs(decodeLilEdian(*ECUData.MCVOLT_P01, *ECUData.MCVOLT_P02)), abs(decodeLilEdian(*ECUData.MCVOLT_P11, *ECUData.MCVOLT_P12))) / 10; //Returns in power of 10s
-    if (!digitalReadFast(sig_shutdownState) && DO_PRECHARGE) {                                                                                                 //if airs have no power but had before, then begin precharge circuit
-        digitalWriteFast(sig_prechargeAir, LOW);                                                                                                               //Keep air open
-        digitalWriteFast(sig_precharge, HIGH);                                                                                                                 //precharge is closed
-
-        if (*ECUData.BMSVolt_p >= 150 && (*ECUData.BMSVolt_p * 0.9) <= MC_voltage) { // BMS voltage is a global
-            DO_PRECHARGE = 0;
-            START_BUTTON_READY = true;
-        }
-    } else { // Can use any MCs voltage, will be the same, must be greater than 270V (0.9 * 300V)
-        // Should return to normal state
-        digitalWriteFast(sig_prechargeAir, HIGH); //close air
-        digitalWriteFast(sig_precharge, LOW);     //precharge is off
-    }
-    return false;
-}
-
-// Initalize messages
-void setMasterMessages() { // BROKEN: validDatas are not mapping to the right addresses!
-    //Both MCs with "mirror" messages
-    Master.newMsg(SPEEDWRITE_ADD, motorPushSpeed, MsgWrite);
-    Master.newMsg(RESETMC_ADD - MOTOR_STATIC_OFFSET, MCResetFunc, MsgWrite, MCOFFSET);
-    Master.newMsg(TEMP2_ADD - MOTOR_STATIC_OFFSET, MCResetFunc, MsgRead, MCOFFSET);
-    Master.newMsg(MOTORPOS_ADD - MOTOR_STATIC_OFFSET, {angle}, MsgRead, MCOFFSET);
-    Master.newMsg(FAULT_ADD, MsgRead, MCOFFSET);
-    Master.newMsg(VOLTAGE_ADD - MOTOR_STATIC_OFFSET, prechargeFunc, MsgRead, MCOFFSET);
-    // Others
-    Master.newMsg(BMS_STATS_ADD, {BMSTemp, BMSVolt, BMSSOC}, MsgRead);
-    Master.newMsg(MOTORL_ADD, {MotorLTemp}, MsgRead);
-    Master.newMsg(MOTORR_ADD, {MotorRTemp}, MsgRead);
-    // I don't like this concurrency issues may arise and system does not allow it rn
-    Master.newMsg(T2T_ADD, {avgAccel, sig_brakePress, steeringAng}, {NULL, NULL, NULL, initalizeCar, NULL}, {IMDReadLight, AMSReadLight, carMode, sig_startButton, pedalAir}, MsgWrite);
-    Master.newMsg(T2T2_ADD, {rpmLWheel, rpmRWheel}, MsgWrite);
-}
 
 // initECUPointers // after all is declared set the appropriate pointers
 // anything that says MC, motor controller, needs to be doubled
@@ -164,6 +122,47 @@ void setMasterMessages() { // BROKEN: validDatas are not mapping to the right ad
 // // Faults
 // ECUData.T2TFlags = &T2TData.buf[7];
 
+bool prechargeFunc(TTMsg *msg) {              // BROKEN: is this suppose to be a handler?
+    if (digitalReadFast(sig_shutdownState)) { // if airs have no power, then precharge must be checked
+        DO_PRECHARGE = 1;                     // its basiaclly a fault
+        START_BUTTON_PUSHED = false;
+    }
+    // Todo was this meant to be just DCBusV?
+    float MC_voltage = max(abs(Master.getData(DCBusV, 0)), abs(Master.getData(DCBusV, 1))) / 10; //Returns in power of 10s
+    if (!digitalReadFast(sig_shutdownState) && DO_PRECHARGE) {                                   //if airs have no power but had before, then begin precharge circuit
+        digitalWriteFast(sig_prechargeAir, LOW);                                                 //Keep air open
+        digitalWriteFast(sig_precharge, HIGH);                                                   //precharge is closed
+
+        if (Master.getData(BMSVolt) >= 150 && (Master.getData(BMSVolt) * 0.9) <= MC_voltage) { // BMS voltage is a global
+            DO_PRECHARGE = 0;
+            START_BUTTON_READY = true;
+        }
+    } else { // Can use any MCs voltage, will be the same, must be greater than 270V (0.9 * 300V)
+        // Should return to normal state
+        digitalWriteFast(sig_prechargeAir, HIGH); //close air
+        digitalWriteFast(sig_precharge, LOW);     //precharge is off
+    }
+    return false;
+}
+
+// Initalize messages
+void setMasterMessages() { // BROKEN: validDatas are not mapping to the right addresses!
+    //Both MCs with "mirror" messages
+    Master.newMsg(SPEEDWRITE_ADD, motorPushSpeed, MsgWrite);
+    Master.newMsg(RESETMC_ADD - MOTOR_STATIC_OFFSET, MCResetFunc, MsgWrite, MCOFFSET);
+    Master.newMsg(TEMP2_ADD - MOTOR_STATIC_OFFSET, MCResetFunc, MsgRead, MCOFFSET);
+    Master.newMsg(MOTORPOS_ADD - MOTOR_STATIC_OFFSET, {angle}, MsgRead, MCOFFSET);
+    Master.newMsg(FAULT_ADD, {MCFAULT0, MCFAULT1, MCFAULT2, MCFAULT3}, MsgRead, MCOFFSET);
+    Master.newMsg(VOLTAGE_ADD - MOTOR_STATIC_OFFSET, prechargeFunc, MsgRead, MCOFFSET);
+    // Others
+    Master.newMsg(BMS_STATS_ADD, {BMSTemp, BMSVolt, BMSSOC, BMSCurrent}, MsgRead); // BROKEN: BMSCurrent not set on BMS?
+    Master.newMsg(MOTORL_ADD, {MotorLTemp}, MsgRead);
+    Master.newMsg(MOTORR_ADD, {MotorRTemp}, MsgRead);
+    // I don't like this concurrency issues may arise and system does not allow it rn
+    Master.newMsg(T2T_ADD, {avgAccel, sig_brakePress, steeringAng}, {NULL, NULL, NULL, initalizeCar, NULL}, {IMDReadLight, AMSReadLight, carMode, sig_startButton, pedalAir}, MsgWrite);
+    Master.newMsg(T2T2_ADD, {rpmLWheel, rpmRWheel}, MsgWrite);
+}
+
 // TODO: calculate average speed
 // TODO: Active aero
 
@@ -188,11 +187,8 @@ void pushT2A() { // final push to tablet | arraysize: Teensy2SerialArrSize array
 }
 
 //TODO: redo IMD and AMS faults
-bool pruneFaults() { // figure which bits go where
-    int final = 0;
-    final = Master.getDataLookup(FAULT_ADD, 4, 0) | Master.getDataLookup(FAULT_ADD, 4, 1); // or faults to check both
-    final = final << 8;
-    final |= Master.getDataLookup(FAULT_ADD, 5, 0) | Master.getDataLookup(FAULT_ADD, 5, 1);
+bool pruneFaults() {                                                       // figure which bits go where
+    int final = Master.getData(MCFAULT2, 0) | Master.getData(MCFAULT2, 1); // or faults to check both MC controllers?
     T2AMsg[10] = final;
     return false;
 }
@@ -210,21 +206,6 @@ void brakeLights() { // Run in loop
     digitalWriteFast(sig_brakeLight, Master.getData(sig_brakePress) > 50);
 }
 
-// load messages as read or write
-// TTMsg ReadTTMessages[]{
-//     MCVolt0,
-//     MCVolt1,
-//     bmsStat,
-//     T2TData,
-// };
-
-// TTMsg WriteTTMessages[]{
-//     WriteSpeed,
-//     MCReset0,
-//     MCReset1,
-//     T2TData,
-// };
-
 /* 
     ----- END ECU specific data -----  
                                         */
@@ -236,22 +217,17 @@ void setup() {
     delay(3000);
     Serial.begin(19200);
     pinMode(boardLed, OUTPUT);
-    Serial.println("Hello!");
     LEDBlink();
-    pinMode(2, OUTPUT); // Fusion Tech's Dual CAN-Bus R pin switch
-    digitalWriteFast(2, LOW);
+    Serial.println("Initalizing Message Master");
+    setMasterMessages();
+    Master.begin();
     LEDBlink();
     digitalWriteFast(boardLed, LOW);
 }
 
 void loop() {
-    // if (Can1.read(dataIn)) {
-    //     teensyRead(dataIn);
-    // }
-    // for (TTMsg msg : WriteTTMessages) { // Iterate through defined TTMsgs and push their data
-    //     updateData(msg);
-    // }
-    // pushT2A(); // Teensy to andriod
+    Master.run();
+    pushT2A(); // Teensy to andriod
 }
 
 void accelCheck() { // read accel numbrs and sync with T2T line

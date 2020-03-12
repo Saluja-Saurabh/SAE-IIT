@@ -29,6 +29,7 @@ void CANMSG::readTTMsg(TTMsg *msg, const byte buf[8]) {
         }
     }
 }
+
 // Iterate through defined TTMsgs and check if the address is one of theirs
 void CANMSG::recieveMsg(const CAN_message_t &msgIn) {
     for (uint8_t i = 0; i < MSGREADS; i++) { // TODO: memoize this
