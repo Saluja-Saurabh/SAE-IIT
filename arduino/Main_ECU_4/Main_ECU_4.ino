@@ -27,11 +27,11 @@
                                         */
 
 // Globals!?
-uint32 MOTOR_OFFSET = 0xe0;         // offset for motor ids // is this actually just for the MCs?
-uint32 MOTOR_STATIC_OFFSET = 0x0A0; // IMPROVE: auto set this global offset to addresses
-bool DO_PRECHARGE = true;           // Precharge latching variable
-bool START_BUTTON_READY = false;    // when to buzz
-bool START_BUTTON_PUSHED = false;   // MC enable bit state
+uint32_t MOTOR_OFFSET = 0xe0;         // offset for motor ids // is this actually just for the MCs?
+uint32_t MOTOR_STATIC_OFFSET = 0x0A0; // IMPROVE: auto set this global offset to addresses
+bool DO_PRECHARGE = true;             // Precharge latching variable
+bool START_BUTTON_READY = false;      // when to buzz
+bool START_BUTTON_PUSHED = false;     // MC enable bit state
 bool PEDAL_ERROR = false;
 bool CAR_MODE = false; // true: RaceMode false: EcoMode
 bool FAULT = false;    // ams, bms mc faults and DOPRECHARGE == 1 from precharge circuit
@@ -190,9 +190,9 @@ void pushT2A() { // final push to tablet | arraysize: Teensy2SerialArrSize array
 //TODO: redo IMD and AMS faults
 bool pruneFaults() { // figure which bits go where
     int final = 0;
-    final = *ECUData.MCFAULT_P00 | *ECUData.MCFAULT_P10; // or faults to check both
+    final = Master.getDataLookup(FAULT_ADD, 4, 0) | Master.getDataLookup(FAULT_ADD, 4, 1); // or faults to check both
     final = final << 8;
-    final |= *ECUData.MCFAULT_P01 | *ECUData.MCFAULT_P11;
+    final |= Master.getDataLookup(FAULT_ADD, 5, 0) | Master.getDataLookup(FAULT_ADD, 5, 1);
     T2AMsg[10] = final;
     return false;
 }

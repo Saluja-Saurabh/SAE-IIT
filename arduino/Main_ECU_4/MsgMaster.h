@@ -23,13 +23,13 @@ private:
     void finalize(); // populate memo table and ensure messages don't conflict
 
 public:
-    bool newMsg(uint32 i, bool isReadMsg, uint32 off = 0);
-    bool newMsg(uint32 i, msgHandle h, bool isReadMsg, uint32 off = 0);
-    bool newMsg(uint32 i, const validData (&p)[4], bool isReadMsg, uint32 off = 0);
-    bool newMsg(uint32 i, const validData (&p)[4], const flagReader (&fF)[8], const validData (&fV)[8], bool isReadMsg, uint32 off = 0);
-    bool newMsg(TTMsg msg, bool isReadMsg, uint32 off = 0);
-    void offsetMsg(TTMsg &msg, uint32 off, bool isReadMsg);
+    bool newMsg(uint32_t i, bool isReadMsg, uint32_t off = 0);
+    bool newMsg(uint32_t i, msgHandle h, bool isReadMsg, uint32_t off = 0);
+    bool newMsg(uint32_t i, const validData (&p)[4], bool isReadMsg, uint32_t off = 0);
+    bool newMsg(uint32_t i, const validData (&p)[4], const flagReader (&fF)[8], const validData (&fV)[8], bool isReadMsg, uint32_t off = 0);
+    void offsetMsg(TTMsg &msg, uint32_t off, bool isReadMsg);
     int16_t getData(validData lookup, bool isOffset = 0);
+    int16_t getDataLookup(uint32_t address, uint8_t dataPacket, bool isOffset = 0);
     bool setData(validData lookup, int16_t value, bool isOffset = 0);
     void begin();
     void run();

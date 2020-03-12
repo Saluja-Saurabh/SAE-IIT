@@ -8,12 +8,11 @@
 
 #include "Funcs.h"
 #include <IFCT.h>                   // ImprovedFLexCanLibrary
-typedef uint32_t uint32;            // clean it up a lil
 typedef bool (*msgHandle)(TTMsg *); // for message specialization such as a message block with only flags
 typedef void (*flagReader)(bool);   // functions that are called when flag bits are true
 
 // TODO: decide on addresses for all the sensors and bms
-enum CanADR : uint32 {
+enum CanADR : uint32_t {
     // motor controller
     SPEEDWRITE_ADD = 0x0C0,
     RESETMC_ADD = 0x0C1,

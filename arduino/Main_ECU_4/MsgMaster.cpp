@@ -1,6 +1,6 @@
 #include "MsgMaster.h"
 
-bool MsgMaster::newMsg(uint32 i, bool isReadMsg, uint32 off = 0) { // blank msg
+bool MsgMaster::newMsg(uint32_t i, bool isReadMsg, uint32_t off = 0) { // blank msg
     TTMsg msg;
     msg.id = i;
     if (off) {
@@ -8,32 +8,36 @@ bool MsgMaster::newMsg(uint32 i, bool isReadMsg, uint32 off = 0) { // blank msg
     }
     insertMsg(msg, isReadMsg);
 }
-bool MsgMaster::newMsg(uint32 i, msgHandle h, bool isReadMsg, uint32 off = 0) { // purely handled by separate functions
+
+bool MsgMaster::newMsg(uint32_t i, msgHandle h, bool isReadMsg, uint32_t off = 0) { // purely handled by separate functions
     TTMsg msg;
     msg.id = i;
     msg.handle = h;
-    msg.offset = off;
+    if (off) {
+        offsetMsg(msg, off, isReadMsg);
+    }
     insertMsg(msg, isReadMsg);
 }
-bool MsgMaster::newMsg(uint32 i, const validData (&p)[4], bool isReadMsg, uint32 off = 0) { // only stores data
+
+bool MsgMaster::newMsg(uint32_t i, const validData (&p)[4], bool isReadMsg, uint32_t off = 0) { // only stores data
     TTMsg msg;
     msg.id = i;
-    msg.offset = off;
+    if (off) {
+        offsetMsg(msg, off, isReadMsg);
+    }
     insertMsg(msg, isReadMsg);
 }
-bool MsgMaster::newMsg(uint32 i, const validData (&p)[4], const flagReader (&fF)[8], const validData (&fV)[8], bool isReadMsg, uint32 off = 0) { // data storage for packets and reactive flags
+
+bool MsgMaster::newMsg(uint32_t i, const validData (&p)[4], const flagReader (&fF)[8], const validData (&fV)[8], bool isReadMsg, uint32_t off = 0) { // data storage for packets and reactive flags
     TTMsg msg;
     msg.id = i;
-    msg.offset = off;
+    if (off) {
+        offsetMsg(msg, off, isReadMsg);
+    }
     insertMsg(msg, isReadMsg);
 }
-bool MsgMaster::newMsg(TTMsg msg, bool isReadMsg, uint32 off = 0) { // explicit duping
-    TTMsg msg;
-    msg.id = msg.id + msg.offset;
-    msg.handle = msg.handle;
-    insertMsg(msg, isReadMsg);
-}
-void MsgMaster::offsetMsg(TTMsg &msg, uint32 off, bool isReadMsg) { // duplicates message blocks; allows the offset block to have seperate read/write data
+
+void MsgMaster::offsetMsg(TTMsg &msg, uint32_t off, bool isReadMsg) { // duplicates message blocks; allows the offset block to have seperate read/write data
     // Master.newMsg(msg->id + msg->offset, msg->packets, msg->flagFuncs, msg->flagValues, msg->handle, isReadMsg);
     TTMsg msgDup;
     msgDup.id = msg.id + off;
@@ -49,6 +53,10 @@ void MsgMaster::begin() {
     finalize();
     Messenger.setIO(ReadTTMessages, WriteTTMessages);
     Messenger.begin();
+}
+
+int16_t MsgMaster::getDataLookup(uint32_t address, uint8_t dataPacket, bool isOffset = 0) {
+    
 }
 
 void flagRead(TTMsg *msg) { // read pins that map to flag variables
