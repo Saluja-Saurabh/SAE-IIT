@@ -1,13 +1,12 @@
 #ifndef TTMSG_H
 #define TTMSG_H
 #define MAXVALIDDATA 99 // highest value of a validData type
-// WARNING!!! Due to incredible implementation skills, the size of the array must be manually set; this includes the "mirror" messages for read/write :/
-// this can be fixed by making this limit huge and checking for null buuut naah
 #define MSGREADS 8  // max # of messages to be read
 #define MSGWRITES 8 // max # of messages to be written
 
 #include "Funcs.h"
-#include <IFCT.h>                   // ImprovedFLexCanLibrary
+#include <IFCT.h> // ImprovedFLexCanLibrary
+typedef struct TTMsg TTmsg;
 typedef bool (*msgHandle)(TTMsg *); // for message specialization such as a message block with only flags
 typedef void (*flagReader)(bool);   // functions that are called when flag bits are true
 
@@ -41,7 +40,7 @@ enum CanADR : uint32_t {
 // validData teensy pin outs are from 0-33
 // validData above 33 are arbitrary; used only for id
 enum validData : uint8_t { // Used to identify what data goes into what message
-    NIL = -1,              // Will this work?; will overflow but is known value
+    NIL = 255,             // giant value to ensure it is not checked
 
     // Motors
     MotorLTemp = 40,

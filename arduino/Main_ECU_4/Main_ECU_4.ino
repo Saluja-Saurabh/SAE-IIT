@@ -180,7 +180,7 @@ void pushT2A() { // final push to tablet | arraysize: Teensy2SerialArrSize array
     T2AMsg[9] = Master.getData(BMSCurrent);
     pruneFaults();
     // T2AMsg[10] = buildFaultList(); //gets updated by fault handler
-    for (int i; i < 11; i++) {
+    for (int i = 0; i < 11; i++) {
         s += T2AMsg[i] + " ";
     }
     Serial.println(s);

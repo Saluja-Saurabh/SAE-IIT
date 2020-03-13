@@ -32,10 +32,10 @@ void CANMSG::readTTMsg(TTMsg *msg, const byte buf[8]) {
 
 // Iterate through defined TTMsgs and check if the address is one of theirs
 void CANMSG::recieveMsg(const CAN_message_t &msgIn) {
-    for (uint8_t i = 0; i < MSGREADS; i++) { // TODO: memoize this
-        TTMsg *msg = ReadTTMessages[i];
+    for (uint8_t i = 0; i < MSGREADS; i++) { // IMPROVE: memoize this
+        TTMsg *msg = Messenger.ReadTTMessages[i];
         if (msg->id == msgIn.id) {
-            readTTMsg(msg, msgIn.buf); // id matches; interpret data based off matching msg structure
+            Messenger.readTTMsg(msg, msgIn.buf); // id matches; interpret data based off matching msg structure
             break;
         };
     }
@@ -45,8 +45,10 @@ void CANMSG::writeMsg(const CAN_message_t *msgOut) {
     Can1.write(*msgOut); // does this duplicate the msg?
 };
 
-void CANMSG::begin(uint32_t baudRate = 500000) {
-    Can1.setBaudRate(500000);             // Speeed
+void CANMSG::begin(uint32_t baudRate) {
+    Can1.setBaudRate(baudRate);           // Speeed
     Can1.enableFIFO();                    // FirstInFirstOut
     Can1.onReceive(Messenger.recieveMsg); // may need to derefrence a pointer to a function
 };
+
+CANMSG Messenger = CANMSG();

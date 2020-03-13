@@ -1,43 +1,43 @@
 #include "MsgMaster.h"
 
-bool MsgMaster::newMsg(uint32_t i, bool isReadMsg, uint32_t off = 0) { // blank msg
+void MsgMaster::newMsg(uint32_t i, bool isReadMsg, uint32_t off) { // blank msg
     TTMsg msg;
     msg.id = i;
     if (off) {
-        offsetMsg(msg, off, isReadMsg);
+        offsetMsg(msg, isReadMsg, off);
     }
     insertMsg(msg, isReadMsg);
 }
 
-bool MsgMaster::newMsg(uint32_t i, msgHandle h, bool isReadMsg, uint32_t off = 0) { // purely handled by separate functions
+void MsgMaster::newMsg(uint32_t i, msgHandle h, bool isReadMsg, uint32_t off) { // purely handled by separate functions
     TTMsg msg;
     msg.id = i;
     msg.handle = h;
     if (off) {
-        offsetMsg(msg, off, isReadMsg);
+        offsetMsg(msg, isReadMsg, off);
     }
     insertMsg(msg, isReadMsg);
 }
 
-bool MsgMaster::newMsg(uint32_t i, const validData (&p)[4], bool isReadMsg, uint32_t off = 0) { // only stores data
+void MsgMaster::newMsg(uint32_t i, const validData (&p)[4], bool isReadMsg, uint32_t off) { // only stores data
     TTMsg msg;
     msg.id = i;
     if (off) {
-        offsetMsg(msg, off, isReadMsg);
+        offsetMsg(msg, isReadMsg, off);
     }
     insertMsg(msg, isReadMsg);
 }
 
-bool MsgMaster::newMsg(uint32_t i, const validData (&p)[4], const flagReader (&fF)[8], const validData (&fV)[8], bool isReadMsg, uint32_t off = 0) { // data storage for packets and reactive flags
+void MsgMaster::newMsg(uint32_t i, const validData (&p)[4], const flagReader (&fF)[8], const validData (&fV)[8], bool isReadMsg, uint32_t off) { // data storage for packets and reactive flags
     TTMsg msg;
     msg.id = i;
     if (off) {
-        offsetMsg(msg, off, isReadMsg);
+        offsetMsg(msg, isReadMsg, off);
     }
     insertMsg(msg, isReadMsg);
 }
 
-void MsgMaster::offsetMsg(TTMsg &msg, uint32_t off, bool isReadMsg) { // duplicates message blocks; allows the offset block to have seperate read/write data
+void MsgMaster::offsetMsg(TTMsg &msg, bool isReadMsg, uint32_t off) { // duplicates message blocks; allows the offset block to have seperate read/write data
     // Master.newMsg(msg->id + msg->offset, msg->packets, msg->flagFuncs, msg->flagValues, msg->handle, isReadMsg);
     TTMsg msgDup;
     msgDup.id = msg.id + off;
@@ -55,8 +55,8 @@ void MsgMaster::begin() {
     Messenger.begin();
 }
 
-int16_t MsgMaster::getDataLookup(uint32_t address, uint8_t dataPacket, bool isOffset = 0) {
-}
+// int16_t MsgMaster::getDataLookup(uint32_t address, uint8_t dataPacket, bool isOffset) {
+// }
 
 void flagRead(TTMsg *msg) { // read pins that map to flag variables
     // TODO: only last flag byte (the important one) is getting checked
@@ -83,7 +83,7 @@ void updateData(TTMsg *msg) {
     }
     for (byte i = 0; i < stop; i += 2) {
         if (msg->packets[i / 2]) {                     // If we have a sensor for this packet read and store it
-            int val = analogRead(msg->packets[i / 2]); // TODO: Some sensors are digital not just analog!
+            int val = analogRead(msg->packets[i / 2]); // TODO: Some sensors are digital not iust analog!
             msg->data[i / 2] = val;                    // store the raw value
             msg->buf[i] = val % 256;
             msg->buf[i + 1] = val / 256;
@@ -106,7 +106,7 @@ void MsgMaster::insertMsg(TTMsg &msg, bool isReadMsg) {
     }
 }
 
-int16_t MsgMaster::getData(validData lookup, bool isOffset = 0) {
+int16_t MsgMaster::getData(validData lookup, bool isOffset) {
     if (lookup < MAXVALIDDATA) {                                                                  // hard coded clamp of max validData
         uint16_t found = isOffset ? *memoDataOff[lookup] : *memoData[lookup];                     // if this is a "mirror" lookup switch arrays
         uint8_t flagBit = memoFlag[lookup];                                                       // if memoFlag is found this is a flag
@@ -119,11 +119,11 @@ int16_t MsgMaster::getData(validData lookup, bool isOffset = 0) {
     return -420;
 }
 
-bool MsgMaster::setData(validData lookup, int16_t value, bool isOffset = 0) {
+bool MsgMaster::setData(validData lookup, int16_t value, bool isOffset) {
     if (lookup < MAXVALIDDATA) {                                            // hard coded clamp of max validData
         int16_t *found = isOffset ? memoDataOff[lookup] : memoData[lookup]; // if this is a "mirror" lookup switch arrays
         uint8_t flagBit = memoFlag[lookup];                                 // if memoFlag is found this is a flag
-        if (*found) {                                                       // if pos is not 0 then it is a flag
+        if (found != nullptr && *found) {                                   // if pos is not 0 then it is a flag
             if (flagBit)
                 *found = bitWrite(*found, flagBit - 1, value ? 1 : 0); // get value, set bit, then change value
             else
@@ -136,18 +136,18 @@ bool MsgMaster::setData(validData lookup, int16_t value, bool isOffset = 0) {
 
 void MsgMaster::finalize() {
     validData dataPoint;
-    uint8_t i, j;
+    uint8_t i;
     for (TTMsg *msg : ReadTTMessages) {
-        for (j = 0; j < 8; j++) {
+        for (i = 0; i < 8; i++) {
             dataPoint = msg->flagValues[i];
             if (dataPoint) {
                 msg->containsFlag = true;
-                memoFlag[dataPoint] = j + 1;                                                  // store the bit position; also confirming this value is a flag | shift by one because 0 == nil
+                memoFlag[dataPoint] = i + 1;                                                  // store the bit position; also confirming this value is a flag | shift by one because 0 == nil
                 msg->isOffset ? memoDataOff[dataPoint] : memoData[dataPoint] = &msg->data[3]; // make sure this works!
             }
         }
 
-        for (j = 0; j < 4; j++) {
+        for (i = 0; i < 4; i++) {
             dataPoint = msg->packets[i];
             if (dataPoint) {
                 msg->isOffset ? memoDataOff[dataPoint] : memoData[dataPoint] = &msg->data[i]; // make sure this works! | Gets refrence of actual data entry on TTMsg
@@ -161,16 +161,16 @@ void MsgMaster::finalize() {
     }
 
     for (TTMsg *msg : WriteTTMessages) {
-        for (j = 0; j < 8; j++) {
+        for (i = 0; i < 8; i++) {
             dataPoint = msg->flagValues[i];
             if (dataPoint) {
                 msg->containsFlag = true;
-                memoFlag[dataPoint] = j + 1;                                                  // store the bit position; also confirming this value is a flag | shift by one because 0 == nil
+                memoFlag[dataPoint] = i + 1;                                                  // store the bit position; also confirming this value is a flag | shift by one because 0 == nil
                 msg->isOffset ? memoDataOff[dataPoint] : memoData[dataPoint] = &msg->data[3]; // make sure this works!
             }
         }
 
-        for (j = 0; j < 4; j++) {
+        for (i = 0; i < 4; i++) {
             dataPoint = msg->packets[i];
             if (dataPoint) {
                 msg->isOffset ? memoDataOff[dataPoint] : memoData[dataPoint] = &msg->data[i]; // make sure this works! | Gets refrence of actual data entry on TTMsg
@@ -183,3 +183,5 @@ void MsgMaster::finalize() {
         } // TODO: find a way to display errors
     }
 }
+
+MsgMaster Master = MsgMaster();
