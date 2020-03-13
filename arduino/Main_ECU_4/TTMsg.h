@@ -84,12 +84,12 @@ enum validData : uint8_t { // Used to identify what data goes into what message
     BMSVolt = 76,
     BMSTemp = 77,
     BMSSOC = 78,
-    BMSCurrent = 82,
+    BMSCurrent = 82, // This was defined before
     //FAULT
     MCFAULT0 = 83,
-    MCFAULT1 = 83,
-    MCFAULT2 = 83,
-    MCFAULT3 = 83,
+    MCFAULT1 = 84,
+    MCFAULT2 = 85,
+    MCFAULT3 = 86,
 
     // accelerator
     avgAccel = 79, // Manually set

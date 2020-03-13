@@ -48,5 +48,5 @@ void CANMSG::writeMsg(const CAN_message_t *msgOut) {
 void CANMSG::begin(uint32_t baudRate = 500000) {
     Can1.setBaudRate(500000);             // Speeed
     Can1.enableFIFO();                    // FirstInFirstOut
-    Can1.onReceive(Messenger.recieveMsg); // does this work?
+    Can1.onReceive(Messenger.recieveMsg); // may need to derefrence a pointer to a function
 };
