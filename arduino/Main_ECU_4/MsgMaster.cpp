@@ -51,42 +51,42 @@ void MsgMaster::offsetMsg(TTMsg &msg, bool isReadMsg, uint32_t off) { // duplica
 
 void MsgMaster::begin() {
     finalize();
-    Messenger.setIO(ReadTTMessages, WriteTTMessages);
+    // Messenger.setIO(ReadTTMessages, WriteTTMessages);
     Messenger.begin();
 }
 
 // int16_t MsgMaster::getDataLookup(uint32_t address, uint8_t dataPacket, bool isOffset) {
 // }
 
-void flagRead(TTMsg *msg) { // read pins that map to flag variables
+void flagRead(TTMsg &msg) { // read pins that map to flag variables
     // TODO: only last flag byte (the important one) is getting checked
     // for (byte i = 7; i <= 6; i--) {                            // capped to last two bytes
-    int i = 7;                                                    // eventually replace with for loop
-    msg->buf[i] = 0;                                              // clear flags
-    for (byte bit = 0; bit < 8; ++bit) {                          // iterate through byte bits
-        if (msg->flagValues[bit]) {                               // check if there is a flag defined
-            msg->buf[i] |= digitalReadFast(msg->flagValues[bit]); // store flag
-        }                                                         //
-        msg->buf[i] = msg->buf[i] << 1;                           // shift bits
+    int i = 7;                                                  // eventually replace with for loop
+    msg.buf[i] = 0;                                             // clear flags
+    for (byte bit = 0; bit < 8; ++bit) {                        // iterate through byte bits
+        if (msg.flagValues[bit]) {                              // check if there is a flag defined
+            msg.buf[i] |= digitalReadFast(msg.flagValues[bit]); // store flag
+        }                                                       //
+        msg.buf[i] = msg.buf[i] << 1;                           // shift bits
     }
     // }
 }
 
-void updateData(TTMsg *msg) {
-    if (msg->handle && !(msg->handle)(msg)) { // if the handle exists and returns true upon calling continue execution
+void updateData(TTMsg &msg) {
+    if (msg.handle && !(msg.handle)(msg)) { // if the handle exists and returns true upon calling continue execution
         return;
     }
     byte stop = 8;
-    if (msg->containsFlag) { // Readflags if they are expected
-        flagRead(msg);       // Check and store flag bytes
-        stop = 6;            // Skip flag bytes
+    if (msg.containsFlag) { // Readflags if they are expected
+        flagRead(msg);      // Check and store flag bytes
+        stop = 6;           // Skip flag bytes
     }
     for (byte i = 0; i < stop; i += 2) {
-        if (msg->packets[i / 2]) {                     // If we have a sensor for this packet read and store it
-            int val = analogRead(msg->packets[i / 2]); // TODO: Some sensors are digital not iust analog!
-            msg->data[i / 2] = val;                    // store the raw value
-            msg->buf[i] = val % 256;
-            msg->buf[i + 1] = val / 256;
+        if (msg.packets[i / 2]) {                     // If we have a sensor for this packet read and store it
+            int val = analogRead(msg.packets[i / 2]); // TODO: Some sensors are digital not iust analog!
+            msg.data[i / 2] = val;                    // store the raw value
+            msg.buf[i] = val % 256;
+            msg.buf[i + 1] = val / 256;
         }
     }
     Messenger.writeMsg(msg);
@@ -94,7 +94,7 @@ void updateData(TTMsg *msg) {
 
 void MsgMaster::run() {
     for (TTMsg *msg : WriteTTMessages) { // Iterate through defined TTMsgs and push their data
-        updateData(msg);
+        updateData(*msg);
     }
 }
 
@@ -119,13 +119,18 @@ int16_t MsgMaster::getData(validData lookup, bool isOffset) {
     return -420;
 }
 
+int16_t bitWriter(int16_t value, int16_t bit, bool bitvalue) { // remove ambiguity
+    bitvalue ? bitSet(value, bit) : bitClear(value, bit);
+    return value;
+}
+
 bool MsgMaster::setData(validData lookup, int16_t value, bool isOffset) {
     if (lookup < MAXVALIDDATA) {                                            // hard coded clamp of max validData
         int16_t *found = isOffset ? memoDataOff[lookup] : memoData[lookup]; // if this is a "mirror" lookup switch arrays
         uint8_t flagBit = memoFlag[lookup];                                 // if memoFlag is found this is a flag
         if (found != nullptr && *found) {                                   // if pos is not 0 then it is a flag
             if (flagBit)
-                *found = bitWrite(*found, flagBit - 1, value ? 1 : 0); // get value, set bit, then change value
+                *found = bitWriter(*found, flagBit - 1, value ? 1 : 0); // get value, set bit, then change value
             else
                 *found = value;
             return true;

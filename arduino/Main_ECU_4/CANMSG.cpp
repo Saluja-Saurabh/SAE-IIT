@@ -1,8 +1,8 @@
 #include "CANMSG.h"
-void CANMSG::setIO(TTMsg *messageReads[MSGREADS], TTMsg *messageWrites[MSGWRITES]) {
-    ReadTTMessages = messageReads;
-    WriteTTMessages = messageWrites;
-};
+// void CANMSG::setIO(TTMsg *messageReads[MSGREADS], TTMsg *messageWrites[MSGWRITES]) {
+//     ReadTTMessages = messageReads;
+//     WriteTTMessages = messageWrites;
+// };
 
 void CANMSG::flagScan(const byte &flagByte, flagReader funcTbl[8]) { // Only used by read messages
     if (flagByte) {                                                  // check if flag has any true bits
@@ -14,17 +14,17 @@ void CANMSG::flagScan(const byte &flagByte, flagReader funcTbl[8]) { // Only use
     }
 }
 
-void CANMSG::readTTMsg(TTMsg *msg, const byte buf[8]) {
+void CANMSG::readTTMsg(TTMsg &msg, const byte buf[8]) {
     byte stop = 8;
-    if (msg->containsFlag) {              // Readflags if they are expected
-        flagScan(buf[7], msg->flagFuncs); // Only checking byte 0
-        msg->buf[7] = buf[7];             // Store byte 0 of flags
-        msg->buf[6] = buf[6];             // also stores byte 1 for completion sake
+    if (msg.containsFlag) {              // Readflags if they are expected
+        flagScan(buf[7], msg.flagFuncs); // Only checking byte 0
+        msg.buf[7] = buf[7];             // Store byte 0 of flags
+        msg.buf[6] = buf[6];             // also stores byte 1 for completion sake
         stop = 6;                         // Skip flag bytes
     }
     for (byte i = 0; i < stop; i += 2) {
-        if (msg->packets[i]) {                                     // are we expecting data on this packet?
-            msg->data[i / 2] = decodeLilEdian(buf[i], buf[i + 1]); // decode and store
+        if (msg.packets[i]) {                                     // are we expecting data on this packet?
+            msg.data[i / 2] = decodeLilEdian(buf[i], buf[i + 1]); // decode and store
             // TTMsg buf values not modified as only data array is needed for the read only TTMsgs
         }
     }
@@ -33,16 +33,16 @@ void CANMSG::readTTMsg(TTMsg *msg, const byte buf[8]) {
 // Iterate through defined TTMsgs and check if the address is one of theirs
 void CANMSG::recieveMsg(const CAN_message_t &msgIn) {
     for (uint8_t i = 0; i < MSGREADS; i++) { // IMPROVE: memoize this
-        TTMsg *msg = Messenger.ReadTTMessages[i];
+        TTMsg *msg = Master.ReadTTMessages[i];
         if (msg->id == msgIn.id) {
-            Messenger.readTTMsg(msg, msgIn.buf); // id matches; interpret data based off matching msg structure
+            Messenger.readTTMsg(*msg, msgIn.buf); // id matches; interpret data based off matching msg structure
             break;
         };
     }
 }
 
-void CANMSG::writeMsg(const CAN_message_t *msgOut) {
-    Can1.write(*msgOut); // does this duplicate the msg?
+void CANMSG::writeMsg(const CAN_message_t &msgOut) {
+    Can1.write(msgOut); // does this duplicate the msg?
 };
 
 void CANMSG::begin(uint32_t baudRate) {

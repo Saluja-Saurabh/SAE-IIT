@@ -61,17 +61,17 @@ void setCarMode(bool bit) {
 }
 
 // handles
-bool MCResetFunc(TTMsg *msg) { // MC Fault reseter thing
-    msg->ext = 0;
-    msg->len = 8;
-    msg->buf[0] = 20;
-    msg->buf[1] = 0;
-    msg->buf[2] = 1;
-    msg->buf[3] = 0;
-    msg->buf[4] = 0;
-    msg->buf[5] = 0;
-    msg->buf[6] = 0;
-    msg->buf[7] = 0;
+bool MCResetFunc(TTMsg &msg) { // MC Fault reseter thing
+    msg.ext = 0;
+    msg.len = 8;
+    msg.buf[0] = 20;
+    msg.buf[1] = 0;
+    msg.buf[2] = 1;
+    msg.buf[3] = 0;
+    msg.buf[4] = 0;
+    msg.buf[5] = 0;
+    msg.buf[6] = 0;
+    msg.buf[7] = 0;
     Messenger.writeMsg(msg);
     return true;
 } // IMPROVE: There may be reliability issues with only sending one?
@@ -122,7 +122,7 @@ bool MCResetFunc(TTMsg *msg) { // MC Fault reseter thing
 // // Faults
 // ECUData.T2TFlags = &T2TData.buf[7];
 
-bool prechargeFunc(TTMsg *msg) {              // BROKEN: is this suppose to be a handler?
+bool prechargeFunc(TTMsg &msg) {              // BROKEN: is this suppose to be a handler?
     if (digitalReadFast(sig_shutdownState)) { // if airs have no power, then precharge must be checked
         DO_PRECHARGE = 1;                     // its basiaclly a fault
         START_BUTTON_PUSHED = false;
@@ -180,7 +180,7 @@ void pushT2A() { // final push to tablet | arraysize: Teensy2SerialArrSize array
     T2AMsg[9] = Master.getData(BMSCurrent);
     pruneFaults();
     // T2AMsg[10] = buildFaultList(); //gets updated by fault handler
-    for (int i; i < 11; i++) {
+    for (int i = 0; i < 11; i++) {
         s += T2AMsg[i] + " ";
     }
     Serial.println(s);
@@ -249,7 +249,7 @@ void accelCheck() { // read accel numbrs and sync with T2T line
 // motor functions
 
 // TODO: test what the accelerators are outputting
-bool motorPushSpeed(TTMsg *msg) {
+bool motorPushSpeed(TTMsg &msg) {
     // "the value of the tquore needs to be a power of 10 of the actual tourqe;" by dominck
     // call ECEdata to accelerator value
     // TODO: torque vector function thing? probably goes here
@@ -263,23 +263,23 @@ bool motorPushSpeed(TTMsg *msg) {
     return false; // Don't continue normal TTMsg proccessing
 }
 
-void motorWriteSpeed(TTMsg *msg, byte offset, bool direction, int speed) { // speed is value 0 - 860
+void motorWriteSpeed(TTMsg &msg, byte offset, bool direction, int speed) { // speed is value 0 - 860
     int percent_speed = constrain(map(speed, 0, 1024, 0, 400), 0, 400);    // seprate func for negative vals (regen)
     // Serial.println(percent_speed);
     //Calculations value = (high_byte x 256) + low_byte
     byte low_byte = percent_speed % 256;
     byte high_byte = percent_speed / 256;
-    msg->id = SPEEDWRITE_ADD + offset - MOTOR_STATIC_OFFSET;
+    msg.id = SPEEDWRITE_ADD + offset - MOTOR_STATIC_OFFSET;
     // Serial.println(msg->id);
-    msg->ext = 0;
-    msg->len = 8;
-    msg->buf[0] = low_byte; // NM
-    msg->buf[1] = high_byte;
-    msg->buf[2] = 0; // Speed
-    msg->buf[3] = 0;
-    msg->buf[4] = direction;           // Direction
-    msg->buf[5] = START_BUTTON_PUSHED; // Inverter enable byte
-    msg->buf[6] = 0;                   // Last two are the maximum torque values || if 0 then defualt values are set
-    msg->buf[7] = 0;
+    msg.ext = 0;
+    msg.len = 8;
+    msg.buf[0] = low_byte; // NM
+    msg.buf[1] = high_byte;
+    msg.buf[2] = 0; // Speed
+    msg.buf[3] = 0;
+    msg.buf[4] = direction;           // Direction
+    msg.buf[5] = START_BUTTON_PUSHED; // Inverter enable byte
+    msg.buf[6] = 0;                   // Last two are the maximum torque values || if 0 then defualt values are set
+    msg.buf[7] = 0;
     Messenger.writeMsg(msg);
 }

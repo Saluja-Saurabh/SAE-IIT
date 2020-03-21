@@ -16,13 +16,14 @@ private:
     uint8_t memoFlag[MAXVALIDDATA + 1];     // check if data is flag and what pos it is in | NOTE: pos is stored starting at 1
     int16_t *memoData[MAXVALIDDATA + 1];    // pointers to actual data values // add one to MAXVALIDDATA bc pins start at 0
     int16_t *memoDataOff[MAXVALIDDATA + 1]; // allows up to one offset of a TTMsg | This array points to the "mirror" Message data instead of the og
-    TTMsg *ReadTTMessages[MSGREADS];        // Msgs to be read
-    TTMsg *WriteTTMessages[MSGWRITES];      // Msgs to be written
     int16_t *memoize(validData lookup, bool &isFlag);
     void insertMsg(TTMsg &msg, bool isReadMsg);
     void finalize(); // populate memo table and ensure messages don't conflict
 
 public:
+    TTMsg *ReadTTMessages[MSGREADS];   // Msgs to be read
+    TTMsg *WriteTTMessages[MSGWRITES]; // Msgs to be written
+
     void newMsg(uint32_t i, bool isReadMsg, uint32_t off = 0);
     void newMsg(uint32_t i, msgHandle h, bool isReadMsg, uint32_t off = 0);
     void newMsg(uint32_t i, const validData (&p)[4], bool isReadMsg, uint32_t off = 0);
