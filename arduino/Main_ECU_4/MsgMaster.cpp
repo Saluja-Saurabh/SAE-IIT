@@ -184,4 +184,4 @@ void MsgMaster::finalize() {
     }
 }
 
-MsgMaster Master = MsgMaster();
+MsgMaster Master;

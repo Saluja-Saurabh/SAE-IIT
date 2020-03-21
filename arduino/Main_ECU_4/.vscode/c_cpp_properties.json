@@ -11,6 +11,7 @@
                 "C:\\\\Program Files (x86)\\\\Arduino\\\\hardware\\\\tools\\\\**",
                 "C:\\\\Program Files (x86)\\\\Arduino\\\\libraries\\\\**",
                 "C:\\\\Users\\\\YaBoi\\\\Documents\\\\Arduino\\\\libraries\\\\**",
+                "D:\\UserDocuments\\Isaias\\Arduino\\libraries*",
                 "C:\\Program Files (x86)\\Arduino\\hardware\\tools\\avr\\lib/gcc\\avr\\5.4.0\\include",
                 "C:\\Program Files (x86)\\Arduino\\hardware\\arduino\\avr\\cores\\arduino",
                 "C:\\Program Files (x86)\\Arduino/hardware\\arduino\\avr\\variants\\standard",

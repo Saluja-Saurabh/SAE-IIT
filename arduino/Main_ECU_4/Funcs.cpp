@@ -5,6 +5,8 @@ void toggleLED() {
     loopSwitch = !loopSwitch;
 }
 
+bool loopSwitch = false;
+
 void LEDBlink() { // how does the teensy check for start button when it should be off when pressed???
     // Should Blink Twice per call
     toggleLED();

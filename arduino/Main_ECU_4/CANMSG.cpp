@@ -51,4 +51,19 @@ void CANMSG::begin(uint32_t baudRate) {
     Can1.onReceive(Messenger.recieveMsg); // may need to derefrence a pointer to a function
 };
 
-CANMSG Messenger = CANMSG();
+CANMSG Messenger;
+
+// Debug
+
+void printMsg(TTMsg const &msg) { // Print out can msg buffer w/ ID
+    Serial.print(msg.id, HEX);
+    Serial.println(" = ");
+    Serial.println(msg.buf[0]);
+    Serial.println(msg.buf[1]);
+    Serial.println(msg.buf[2]);
+    Serial.println(msg.buf[3]);
+    Serial.println(msg.buf[4]);
+    Serial.println(msg.buf[5]);
+    Serial.println(msg.buf[6]);
+    Serial.println(msg.buf[7]);
+}

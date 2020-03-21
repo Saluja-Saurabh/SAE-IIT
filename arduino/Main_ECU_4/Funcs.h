@@ -3,7 +3,7 @@
 #include <arduino.h>
 
 // Led blinkery stuff
-bool loopSwitch = false;
+extern bool loopSwitch;
 void toggleLED();
 void LEDBlink();
 
