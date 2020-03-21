@@ -7,16 +7,13 @@ void toggleLED() {
 
 bool loopSwitch = false;
 
-void LEDBlink() { // how does the teensy check for start button when it should be off when pressed???
-    // Should Blink Twice per call
-    toggleLED();
-    delay(250);
-    toggleLED();
-    delay(125);
-    toggleLED();
-    delay(250);
-    toggleLED();
-    delay(125);
+void LEDBlink(int times) { // how does the teensy check for start button when it should be off when pressed???
+    for (int i = 0; i < times; i++) {
+        toggleLED();
+        delay(250);
+        toggleLED();
+        delay(125);
+    }
 }
 
 template <typename T = int>

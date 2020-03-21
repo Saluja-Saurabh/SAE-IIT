@@ -1,7 +1,7 @@
 #ifndef CANMSG_H
 #define CANMSG_H
 
-#include "ECU4.h"
+#include "TTMsg.h"
 #include "MsgMaster.h"
 
 class CANMSG {

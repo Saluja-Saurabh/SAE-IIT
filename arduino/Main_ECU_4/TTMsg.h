@@ -25,6 +25,7 @@ enum CanADR : uint32_t {
     VOLTAGE_ADD = 0x0A7,
     FAULT_ADD = 0x0AB,
     MCOFFSET = 0x0FF,
+    MOTOR_STATIC_OFFSET = 0x0A0, // IMPROVE: auto set this motor offset to addresses
     // IDK
     INFO_ADD = 0x1A5,
     // BMS
@@ -152,10 +153,10 @@ enum validData : uint8_t { // Used to identify what data goes into what message
 
 // TODO: actually initalize TTMsg and CAN_message_t values in constructor instead of depending on just the default values!
 struct TTMsg : public CAN_message_t { // Teensy to Teensy message definition/structure
-    validData packets[4] = {};     // data that have data in this message; position in table sets where PKT goes (see ^) // points to table of 4
+    validData packets[4] = {};        // data that have data in this message; position in table sets where PKT goes (see ^) // points to table of 4
     bool isOffset = 0;                // now any data can have an offset for one "mirror" message
     flagReader flagFuncs[8] = {0};    // functions that are called when a flag bit is true | limits callbacks to flag byte 0 // points to table of 8
-    validData flagValues[8] = {};  // sensor pins to read and push onto the flag byte | only flag byte 0 // points to table of 8
+    validData flagValues[8] = {};     // sensor pins to read and push onto the flag byte | only flag byte 0 // points to table of 8
     msgHandle handle = 0;             // function that can handle the message instead | for specialization of messages
     bool containsFlag = 0;            // used for memo
     int16_t data[4] = {0};            // store decoded or pin data for later use | NOTE: this value is synced with actual bytes that are read/written

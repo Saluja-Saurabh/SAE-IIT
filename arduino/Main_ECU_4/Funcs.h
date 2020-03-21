@@ -5,7 +5,7 @@
 // Led blinkery stuff
 extern bool loopSwitch;
 void toggleLED();
-void LEDBlink();
+void LEDBlink(int times = 2);
 
 template <typename T = int>
 T swapDbl(T *tblA[2], T *tblB[2]);

@@ -1,6 +1,7 @@
 #ifndef MSGMSTR_H
 #define MSGMSTR_H
 
+#include "TTMsg.h"
 #include "CANMSG.h"
 
 enum msgMode : bool { // for clarity
