@@ -1,16 +1,21 @@
 #include "ECU4.h"
+#define TEENSYFRONT
+#define TEENSYBACK
 
 void ECU4::begin() {
+    int time = millis();
     pinMode(boardLed, OUTPUT);
 #ifdef TEENSYFRONT
     LEDBlink(2); // front will blink twice
+    Serial.println("Initalizing ECU4 Teensy 3.6 FRONT CONFIG");
 #endif
 #ifdef TEENSYBACK
     LEDBlink(3); // back will blink thrice
+    Serial.println("Initalizing ECU4 Teensy 3.6 BACK CONFIG");
 #endif
-    Serial.println("Initalizing Message Master FRONT");
     setMasterMessages();
     Master.begin();
+    Serial.println("Initalization Finished in: " + millis() - time);
     LEDBlink();
     digitalWriteFast(boardLed, LOW);
 }
@@ -32,12 +37,16 @@ void ECU4::run() {
 */
 
 #ifdef TEENSYFRONT
-// TODO: calculate average speed and do what with it?
-// TODO: Active aero ???
+// TODO: Calculate average speed and do what with it?
+// TODO: Active aero?
 
-//TODO: redo IMD and AMS faults
-bool pruneFaults() {                                                       // figure which bits go where
-    int final = Master.getData(MCFAULT2, 0) | Master.getData(MCFAULT2, 1); // or faults to check both MC controllers?
+bool pruneFaults() {                                                       // TODO: Readded IMD and AMS faults?
+    int final = Master.getData(MCFAULT2, 0) | Master.getData(MCFAULT2, 1); // bitwise OR faults to check both MC controllers
+    final = final >> 3;                                                    // remove "reserved" bits
+    final = final << 1;                                                    // for IMD fault
+    final |= Master.getData(IMDReadLight);                                 // IMD Fault ?
+    final = final << 1;                                                    // for BMS fault
+    final |= Master.getData(AMSReadLight);                                 // AMS Fault ?
     T2AMsg[10] = final;
     return false;
 }
@@ -148,12 +157,14 @@ void motorWriteSpeed(TTMsg &msg, byte offset, bool direction, int speed) { // sp
 void setPedalState(bool bit) {
     PEDAL_ERROR = bit;
 }
+
 void setCarMode(bool bit) {
     // TODO: ensure car is not moving
     if (Master.getData(angle, 0) < 5) { // rpm = motor controller rpm only for first MC
         CAR_MODE = bit;
     }
 }
+
 #endif
 #ifdef TEENSYBACK
 // flag handlers
@@ -161,6 +172,7 @@ void initalizeCar(bool bit) {
     START_BUTTON_PUSHED = true;
     Serial.println("MOTORS UNLOCKED");
 }
+
 // packet handlers
 // TODO: test what the accelerators are outputting
 bool motorPushSpeed(TTMsg &msg) {
@@ -175,6 +187,7 @@ bool motorPushSpeed(TTMsg &msg) {
     motorWriteSpeed(msg, MOTOR_OFFSET, 1, speed1);
     return false; // Don't continue normal TTMsg proccessing
 }
+
 bool prechargeFunc(TTMsg &msg) {              // BROKEN: is this suppose to be a handler? should only be called in beginning? put in ecu class?
     if (digitalReadFast(sig_shutdownState)) { // if airs have no power, then precharge must be checked
         DO_PRECHARGE = 1;                     // its basiaclly a fault

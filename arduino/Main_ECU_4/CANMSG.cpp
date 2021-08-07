@@ -1,4 +1,5 @@
 #include "CANMSG.h"
+
 // void CANMSG::setIO(TTMsg *messageReads[MSGREADS], TTMsg *messageWrites[MSGWRITES]) {
 //     ReadTTMessages = messageReads;
 //     WriteTTMessages = messageWrites;
@@ -18,9 +19,9 @@ void CANMSG::readTTMsg(TTMsg &msg, const byte buf[8]) {
     byte stop = 8;
     if (msg.containsFlag) {              // Readflags if they are expected
         flagScan(buf[7], msg.flagFuncs); // Only checking byte 0
-        msg.buf[7] = buf[7];             // Store byte 0 of flags
+        msg.buf[7] = buf[7];             // Store byte 0 which are flags
         msg.buf[6] = buf[6];             // also stores byte 1 for completion sake
-        stop = 6;                         // Skip flag bytes
+        stop = 6;                        // Skip flag bytes
     }
     for (byte i = 0; i < stop; i += 2) {
         if (msg.packets[i]) {                                     // are we expecting data on this packet?

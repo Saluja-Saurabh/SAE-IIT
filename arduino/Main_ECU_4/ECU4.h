@@ -1,12 +1,13 @@
 #ifndef ECU4_H
 #define ECU4_H
+#define TEENSYFRONT
+#define TEENSYBACK
 
 #include "CANMSG.h"
 #include "MsgMaster.h"
 
 #ifdef TEENSYFRONT
-
-// GloBAlSA!!!!11!
+// Globals
 bool PEDAL_ERROR = false;
 bool CAR_MODE = false; // true: RaceMode false: EcoMode
 bool FAULT = false;    // ams, bms mc faults and DOPRECHARGE == 1 from precharge circuit
@@ -29,7 +30,7 @@ void accelCheck();
 
 #ifdef TEENSYBACK
 
-// GloBAlSA!!!!11!
+// Globals
 bool DO_PRECHARGE = true;         // Precharge latching variable
 bool START_BUTTON_READY = false;  // when to buzz
 bool START_BUTTON_PUSHED = false; // MC enable bit state

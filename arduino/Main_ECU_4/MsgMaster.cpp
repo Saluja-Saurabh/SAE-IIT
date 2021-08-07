@@ -101,8 +101,10 @@ void MsgMaster::run() {
 void MsgMaster::insertMsg(TTMsg &msg, bool isReadMsg) {
     if (isReadMsg && READNo < MSGREADS - 1) {
         ReadTTMessages[READNo++] = &msg;
+        return;
     } else if (WRITENo < MSGWRITES - 1) {
         WriteTTMessages[WRITENo++] = &msg;
+        return;
     }
 }
 
@@ -119,7 +121,7 @@ int16_t MsgMaster::getData(validData lookup, bool isOffset) {
     return -420;
 }
 
-int16_t bitWriter(int16_t value, int16_t bit, bool bitvalue) { // remove ambiguity
+int16_t bitWriter(int16_t value, int16_t bit, bool bitvalue) { // remove ambiguity from arduino hard definition
     bitvalue ? bitSet(value, bit) : bitClear(value, bit);
     return value;
 }

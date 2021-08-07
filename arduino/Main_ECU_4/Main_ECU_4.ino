@@ -5,8 +5,11 @@
     Version 4 Rev 2
 */
 
-// #define TEENSYFRONT // hmmmmmm
+#define TEENSYFRONT
 #define TEENSYBACK
+
+#define DEBUG 0
+
 #include "ECU4.h"
 #include "MsgMaster.h"
 #include "TTMsg.h"
